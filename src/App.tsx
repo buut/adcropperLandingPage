@@ -10,6 +10,7 @@ import MediaAssetContainer from './components/MediaAssetContainer'
 import VideoAssetContainer from './components/VideoAssetContainer'
 import WidgetAssetContainer from './components/WidgetAssetContainer'
 import ButtonAssetContainer from './components/ButtonAssetContainer'
+import FormAssetContainer from './components/FormAssetContainer'
 import TextAssetContainer from './components/TextAssetContainer'
 import PolygonAssetContainer from './components/PolygonAssetContainer'
 import FontAssetContainer from './components/FontAssetContainer'
@@ -66,7 +67,7 @@ const getMediaDimensions = (url: string, type: 'image' | 'video'): Promise<{ wid
 export interface Layer {
   id: string;
   name: string;
-  type: 'image' | 'widget' | 'group' | 'button' | 'text' | 'shape' | 'video';
+  type: 'image' | 'widget' | 'group' | 'button' | 'text' | 'shape' | 'video' | 'form-input';
   url?: string;
   x: number;
   y: number;
@@ -192,11 +193,12 @@ export interface LandingPageAction {
 
 export type AnimationTriggerEvent =
   | 'click' | 'hover' | 'hoverEnd' | 'touchStart' | 'touchEnd'
-  | 'focus' | 'blur' | 'scroll-into-view';
+  | 'focus' | 'blur' | 'scroll-into-view'
+  | 'scroll-out-view' | 'dblclick' | 'long-press' | 'keydown' | 'idle';
 
 export type AnimationTriggerAction =
   | 'play-entry' | 'play-main' | 'play-exit' | 'play-all'
-  | 'stop' | 'pause' | 'resume' | 'reset';
+  | 'stop' | 'pause' | 'resume' | 'reset' | 'reverse';
 
 export interface InteractionAction {
   id: string;
@@ -204,6 +206,8 @@ export interface InteractionAction {
   action: AnimationTriggerAction;
   targetLayerId?: string; // if unset, targets the layer itself
   includeChildren?: boolean;
+  keyCode?: string;     // 'keydown' event için (örn: "Space", "KeyA", "ArrowUp")
+  idleSeconds?: number; // 'idle' event için (varsayılan: 3)
 }
 
 export interface GuideLine {
@@ -1296,11 +1300,15 @@ const App: React.FC = () => {
     if (layer.type === 'button') {
       let incomingMeta = {};
       try { incomingMeta = JSON.parse(layer.variant || '{}'); } catch {}
-      const enrichedMeta = { 
+      const enrichedMeta = {
         ...prepareButtonMetadata(incomingMeta, layer.url || ''),
         lockAspectRatio: false
       };
       finalLayer.variant = JSON.stringify(enrichedMeta);
+    } else if (layer.type === 'form-input') {
+      let incomingMeta = {};
+      try { incomingMeta = JSON.parse(layer.variant || '{}'); } catch {}
+      finalLayer.variant = JSON.stringify({ ...prepareFormInputMetadata(incomingMeta), lockAspectRatio: false });
     } else {
       let incomingMeta = {};
       try { incomingMeta = JSON.parse(layer.variant || '{}'); } catch {}
@@ -4067,6 +4075,34 @@ const App: React.FC = () => {
     }));
   };
 
+  const prepareFormInputMetadata = (dropMeta: any) => {
+    return {
+      formType: dropMeta?.formType || 'number-input',
+      label: dropMeta?.label || 'Quantity',
+      placeholder: dropMeta?.placeholder ?? '0',
+      defaultValue: dropMeta?.defaultValue ?? '',
+      min: dropMeta?.min ?? '',
+      max: dropMeta?.max ?? '',
+      step: dropMeta?.step ?? '1',
+      required: dropMeta?.required ?? false,
+      disabled: dropMeta?.disabled ?? false,
+      showLabel: dropMeta?.showLabel ?? true,
+      labelPosition: dropMeta?.labelPosition || 'top',
+      prefix: dropMeta?.prefix || '',
+      suffix: dropMeta?.suffix || '',
+      showSteppers: dropMeta?.showSteppers ?? true,
+      helperText: dropMeta?.helperText || '',
+      errorMessage: dropMeta?.errorMessage || '',
+      borderRadius: dropMeta?.borderRadius ?? '8',
+      borderColor: dropMeta?.borderColor || '#e5e7eb',
+      backgroundColor: dropMeta?.backgroundColor || '#ffffff',
+      textColor: dropMeta?.textColor || '#111827',
+      labelColor: dropMeta?.labelColor || '#374151',
+      fontSize: dropMeta?.fontSize ?? '14',
+      ...dropMeta,
+    };
+  };
+
   const prepareButtonMetadata = (dropMeta: any, url: string) => {
     return {
       label: dropMeta?.label || url || 'Button',
@@ -4231,6 +4267,8 @@ const App: React.FC = () => {
       variant = JSON.stringify(videoMeta);
     } else if (type === 'shape') {
       variant = JSON.stringify(dropMeta || {});
+    } else if (type === 'form-input') {
+      variant = JSON.stringify(prepareFormInputMetadata(dropMeta));
     }
 
     const effectiveStageId = targetStageId || selectedStageId;
@@ -4249,6 +4287,10 @@ const App: React.FC = () => {
       } else if (type === 'widget') {
         dropWidth = 300;
         dropHeight = 150;
+      } else if (type === 'form-input') {
+        dropWidth = 280;
+        const ft = dropMeta?.formType || 'text-input';
+        dropHeight = ft === 'textarea' ? 120 : ft === 'checkbox' ? 36 : ft === 'radio' ? 80 : ft === 'form-button' ? 48 : 68;
       } else if (type === 'shape') {
         if (dropMeta?.shapeType === 'line') {
           dropWidth = 200;
@@ -5565,11 +5607,14 @@ const handleArrangeStages = React.useCallback(() => {
               />
             )}
             {activeSidebarTab === 'button' && (
-              <ButtonAssetContainer 
-                onDoubleClickAsset={handleDropOnWorkspace} 
-                customAssets={customButtonAssets} 
+              <ButtonAssetContainer
+                onDoubleClickAsset={handleDropOnWorkspace}
+                customAssets={customButtonAssets}
                 onDeleteAsset={handleDeleteButtonAsset}
               />
+            )}
+            {activeSidebarTab === 'form' && (
+              <FormAssetContainer onDoubleClickAsset={handleDropOnWorkspace} />
             )}
 
             {activeSidebarTab === 'widget' && (

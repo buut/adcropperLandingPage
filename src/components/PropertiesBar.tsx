@@ -2896,13 +2896,18 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
 
                     const IA_EVENT_OPTIONS: { id: AnimationTriggerEvent; label: string; icon: string }[] = [
                         { id: 'click',            label: 'Click / Tap',       icon: 'touch_app' },
-                        { id: 'hover',            label: 'Mouse Over',         icon: 'ads_click' },
-                        { id: 'hoverEnd',         label: 'Mouse Out',          icon: 'eject' },
-                        { id: 'touchStart',       label: 'Touch Start',        icon: 'swipe' },
-                        { id: 'touchEnd',         label: 'Touch End',          icon: 'swipe_left' },
-                        { id: 'focus',            label: 'Focus',              icon: 'center_focus_weak' },
-                        { id: 'blur',             label: 'Blur',               icon: 'blur_on' },
-                        { id: 'scroll-into-view', label: 'Scroll Into View',   icon: 'visibility' },
+                        { id: 'dblclick',         label: 'Double Click',      icon: 'mouse' },
+                        { id: 'hover',            label: 'Mouse Over',        icon: 'ads_click' },
+                        { id: 'hoverEnd',         label: 'Mouse Out',         icon: 'eject' },
+                        { id: 'long-press',       label: 'Long Press',        icon: 'back_hand' },
+                        { id: 'touchStart',       label: 'Touch Start',       icon: 'swipe' },
+                        { id: 'touchEnd',         label: 'Touch End',         icon: 'swipe_left' },
+                        { id: 'focus',            label: 'Focus',             icon: 'center_focus_weak' },
+                        { id: 'blur',             label: 'Blur',              icon: 'blur_on' },
+                        { id: 'scroll-into-view', label: 'Scroll Into View',  icon: 'visibility' },
+                        { id: 'scroll-out-view',  label: 'Scroll Out View',   icon: 'visibility_off' },
+                        { id: 'keydown',          label: 'Key Press',         icon: 'keyboard' },
+                        { id: 'idle',             label: 'Idle',              icon: 'hourglass_empty' },
                     ];
 
                     const IA_ACTION_OPTIONS: { id: AnimationTriggerAction; label: string; icon: string; desc: string }[] = [
@@ -2910,6 +2915,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                         { id: 'play-main',  label: 'Play Loop',   icon: 'loop',                desc: 'Play looping animation' },
                         { id: 'play-exit',  label: 'Play Exit',   icon: 'skip_next',           desc: 'Play exit animation' },
                         { id: 'play-all',   label: 'Play Full',   icon: 'play_circle',         desc: 'Play all phases' },
+                        { id: 'reverse',    label: 'Reverse',     icon: 'replay',              desc: 'Play animation in reverse' },
                         { id: 'stop',       label: 'Stop',        icon: 'stop_circle',         desc: 'Stop animation' },
                         { id: 'pause',      label: 'Pause',       icon: 'pause_circle',        desc: 'Pause animation' },
                         { id: 'resume',     label: 'Resume',      icon: 'play_circle_outline', desc: 'Resume from pause' },
@@ -2976,7 +2982,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                     <span className={`material-symbols-outlined text-[13px] text-gray-300 transition-all ${openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-event' ? 'rotate-180 text-primary' : ''}`}>keyboard_arrow_down</span>
                                                 </div>
                                                 {openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-event' && (
-                                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
+                                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-y-auto max-h-48">
                                                         {IA_EVENT_OPTIONS.map(opt => (
                                                             <button
                                                                 key={opt.id}
@@ -3126,17 +3132,44 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                 )}
                                             </div>
                                         </div>
+                                        {/* Keydown config */}
+                                        {ia.event === 'keydown' && (
+                                            <div className="flex flex-col gap-1 mt-1 border-t border-gray-50 pt-2">
+                                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Key (e.g. Space, KeyA, ArrowUp)</span>
+                                                <input
+                                                    type="text"
+                                                    value={ia.keyCode ?? ''}
+                                                    placeholder="Space"
+                                                    onChange={e => updateActions(actions.map((x, i) => i === idx ? { ...x, keyCode: e.target.value || undefined } : x))}
+                                                    className="px-2.5 py-1.5 text-[10px] font-mono bg-gray-50 border border-gray-100 rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-gray-700"
+                                                />
+                                            </div>
+                                        )}
+                                        {/* Idle config */}
+                                        {ia.event === 'idle' && (
+                                            <div className="flex flex-col gap-1 mt-1 border-t border-gray-50 pt-2">
+                                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Idle seconds</span>
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    step={1}
+                                                    value={ia.idleSeconds ?? 3}
+                                                    onChange={e => updateActions(actions.map((x, i) => i === idx ? { ...x, idleSeconds: Math.max(1, Number(e.target.value)) } : x))}
+                                                    className="px-2.5 py-1.5 text-[10px] font-bold bg-gray-50 border border-gray-100 rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-gray-700 w-full"
+                                                />
+                                            </div>
+                                        )}
                                         {(() => {
                                             const actualTarget = targetLayer || fl;
                                             if (actualTarget?.type === 'group' && ['play-entry', 'play-main', 'play-exit', 'play-all', 'toggle-animation', 'stop-animation'].includes(ia.action)) {
                                                 return (
                                                     <div className="flex items-center gap-2 mt-2 px-1 border-t border-gray-50 pt-2">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            id={`ia-children-${ia.id}`} 
-                                                            checked={!!ia.includeChildren} 
+                                                        <input
+                                                            type="checkbox"
+                                                            id={`ia-children-${ia.id}`}
+                                                            checked={!!ia.includeChildren}
                                                             onChange={e => updateActions(actions.map((x, i) => i === idx ? { ...x, includeChildren: e.target.checked } : x))}
-                                                            className="accent-primary" 
+                                                            className="accent-primary"
                                                         />
                                                         <label htmlFor={`ia-children-${ia.id}`} className="text-[9px] font-bold text-gray-500 uppercase tracking-tight">Play children animations</label>
                                                     </div>
@@ -6862,6 +6895,515 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                     </div>
                                 </div>
 
+                        </div>
+                    );
+                })()}
+
+                {/* ── Form Input Properties ────────────────────────── */}
+                {selectedLayers.length === 1 && selectedLayers[0].type === 'form-input' && (() => {
+                    const fl = selectedLayers[0];
+                    let fm: any = {
+                        formType: 'text-input', label: '', placeholder: '',
+                        defaultValue: '', required: false, disabled: false,
+                        showLabel: true, labelPosition: 'top',
+                        helperText: '', errorMessage: '',
+                        borderRadius: '8', borderColor: '#e5e7eb',
+                        backgroundColor: '#ffffff', textColor: '#111827',
+                        labelColor: '#374151', fontSize: '14',
+                    };
+                    try { fm = { ...fm, ...JSON.parse(fl.variant || '{}') }; } catch {}
+                    const ft: string = fm.formType || 'text-input';
+
+                    const updateFm = (updates: Record<string, any>) => {
+                        onUpdateLayers([fl.id], { variant: JSON.stringify({ ...fm, ...updates }) });
+                    };
+
+                    const inputCls = "w-full px-2.5 py-1.5 text-[10px] font-bold bg-gray-50 border border-gray-100 rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-gray-700";
+                    const numInputCls = `${inputCls} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`;
+                    const labelCls = "text-[8px] font-black text-gray-400 uppercase tracking-widest";
+                    const sectionCls = "flex flex-col gap-3 pt-3 pb-3 border-b border-gray-50";
+
+                    const Toggle = ({ value, onChange }: { value: boolean; onChange: () => void }) => (
+                        <button onClick={onChange} className={`relative w-8 h-4 rounded-full transition-colors ${value ? 'bg-primary' : 'bg-gray-200'}`}>
+                            <span className="absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-all" style={{ left: value ? '18px' : '2px' }} />
+                        </button>
+                    );
+
+                    const ColorRow = ({ keyName, label }: { keyName: string; label: string }) => (
+                        <div className="flex items-center justify-between">
+                            <span className={labelCls}>{label}</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-mono text-gray-400">{fm[keyName]}</span>
+                                <label className="relative cursor-pointer">
+                                    <div className="w-6 h-6 rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                                        <div className="w-full h-full" style={{ backgroundColor: fm[keyName] }} />
+                                    </div>
+                                    <input type="color" value={fm[keyName] || '#000000'} onChange={e => updateFm({ [keyName]: e.target.value })} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                                </label>
+                            </div>
+                        </div>
+                    );
+
+                    const ICONS: Record<string, string> = {
+                        'text-input': 'text_fields', 'email-input': 'alternate_email',
+                        'number-input': 'pin', 'textarea': 'notes',
+                        'checkbox': 'check_box', 'select': 'expand_circle_down',
+                        'radio': 'radio_button_checked', 'form-button': 'touch_app',
+                    };
+                    const TITLES: Record<string, string> = {
+                        'text-input': 'Text Input', 'email-input': 'Email Input',
+                        'number-input': 'Number Input', 'textarea': 'Textarea',
+                        'checkbox': 'Checkbox', 'select': 'Select / Dropdown',
+                        'radio': 'Radio Button', 'form-button': 'Submit Button',
+                    };
+
+                    return (
+                        <div className="flex flex-col">
+                            {/* Header */}
+                            <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+                                <span className="material-symbols-outlined text-[14px] text-primary">{ICONS[ft] || 'input'}</span>
+                                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{TITLES[ft] || 'Form Input'}</span>
+                            </div>
+
+                            <div className="px-4 flex flex-col gap-0">
+
+                                {/* ── Common Settings ── */}
+                                <div className={sectionCls}>
+                                    <span className={labelCls}>Settings</span>
+
+                                    {/* Field Name (for form submission data key) */}
+                                    {ft !== 'form-button' && (
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Field Name</span>
+                                            <input type="text" value={fm.name || ''} onChange={e => updateFm({ name: e.target.value })} className={inputCls} placeholder="e.g. email, firstName" />
+                                        </div>
+                                    )}
+
+                                    {/* Label field */}
+                                    {ft === 'checkbox' && (
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Checkbox Text</span>
+                                            <input type="text" value={fm.label || ''} onChange={e => updateFm({ label: e.target.value })} className={inputCls} placeholder="I agree to the Terms..." />
+                                        </div>
+                                    )}
+                                    {ft === 'form-button' && (
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Button Text</span>
+                                            <input type="text" value={fm.label || ''} onChange={e => updateFm({ label: e.target.value })} className={inputCls} placeholder="Submit" />
+                                        </div>
+                                    )}
+                                    {ft !== 'checkbox' && ft !== 'form-button' && (
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Label</span>
+                                            <input type="text" value={fm.label || ''} onChange={e => updateFm({ label: e.target.value })} className={inputCls} placeholder="Label text" />
+                                        </div>
+                                    )}
+
+                                    {/* Placeholder — text/email/number/textarea/select only */}
+                                    {(ft === 'text-input' || ft === 'email-input' || ft === 'textarea') && (
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Placeholder</span>
+                                            <input type="text" value={fm.placeholder || ''} onChange={e => updateFm({ placeholder: e.target.value })} className={inputCls} placeholder="—" />
+                                        </div>
+                                    )}
+
+                                    {/* Select placeholder */}
+                                    {ft === 'select' && (
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Placeholder</span>
+                                            <input type="text" value={fm.placeholder || ''} onChange={e => updateFm({ placeholder: e.target.value })} className={inputCls} placeholder="Choose..." />
+                                        </div>
+                                    )}
+
+                                    {/* Default value — text/email/number */}
+                                    {(ft === 'text-input' || ft === 'email-input' || ft === 'textarea') && (
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Default Value</span>
+                                            <input type="text" value={fm.defaultValue || ''} onChange={e => updateFm({ defaultValue: e.target.value })} className={inputCls} placeholder="—" />
+                                        </div>
+                                    )}
+
+                                    {/* Number-specific: min/max/step */}
+                                    {ft === 'number-input' && (<>
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Default Value</span>
+                                            <input type="number" value={fm.defaultValue || ''} onChange={e => updateFm({ defaultValue: e.target.value })} className={numInputCls} placeholder="—" />
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[['min','Min'],['max','Max'],['step','Step']].map(([k,l]) => (
+                                                <div key={k} className="flex flex-col gap-1">
+                                                    <span className={labelCls}>{l}</span>
+                                                    <input type="number" value={fm[k] || ''} onChange={e => updateFm({ [k]: e.target.value })} className={numInputCls} placeholder="—" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>)}
+
+                                    {/* Textarea rows */}
+                                    {ft === 'textarea' && (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Rows</span>
+                                                <input type="number" min="2" max="20" value={fm.rows || 4} onChange={e => updateFm({ rows: parseInt(e.target.value) || 4 })} className={numInputCls} />
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Resize</span>
+                                                <select value={fm.resize || 'vertical'} onChange={e => updateFm({ resize: e.target.value })} className={inputCls}>
+                                                    <option value="none">None</option>
+                                                    <option value="vertical">Vertical</option>
+                                                    <option value="horizontal">Horizontal</option>
+                                                    <option value="both">Both</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Checkbox: default checked + link */}
+                                    {ft === 'checkbox' && (<>
+                                        <div className="flex items-center justify-between">
+                                            <span className={labelCls}>Default Checked</span>
+                                            <Toggle value={!!fm.defaultChecked} onChange={() => updateFm({ defaultChecked: !fm.defaultChecked })} />
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Link Text</span>
+                                            <input type="text" value={fm.linkText || ''} onChange={e => updateFm({ linkText: e.target.value })} className={inputCls} placeholder="Terms & Conditions" />
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Link URL</span>
+                                            <input type="text" value={fm.linkUrl || ''} onChange={e => updateFm({ linkUrl: e.target.value })} className={inputCls} placeholder="https://..." />
+                                        </div>
+                                    </>)}
+
+                                    {/* Select options */}
+                                    {ft === 'select' && (<>
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <span className={labelCls}>Options</span>
+                                                <button
+                                                    onClick={() => updateFm({ options: [...(fm.options || []), { label: `Option ${(fm.options || []).length + 1}`, value: `option${(fm.options || []).length + 1}` }] })}
+                                                    className="text-[8px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors"
+                                                >+ Add</button>
+                                            </div>
+                                            <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
+                                                {(fm.options || []).map((opt: any, i: number) => (
+                                                    <div key={i} className="flex items-center gap-1.5">
+                                                        <input
+                                                            type="text"
+                                                            value={opt.label}
+                                                            onChange={e => {
+                                                                const opts = [...(fm.options || [])];
+                                                                opts[i] = { ...opts[i], label: e.target.value, value: e.target.value.toLowerCase().replace(/\s+/g, '_') };
+                                                                updateFm({ options: opts });
+                                                            }}
+                                                            className={`${inputCls} flex-1`}
+                                                            placeholder={`Option ${i + 1}`}
+                                                        />
+                                                        <button
+                                                            onClick={() => updateFm({ options: (fm.options || []).filter((_: any, j: number) => j !== i) })}
+                                                            className="w-5 h-5 flex items-center justify-center rounded text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors shrink-0"
+                                                        ><span className="material-symbols-outlined text-[12px]">close</span></button>
+                                                    </div>
+                                                ))}
+                                                {(!fm.options || fm.options.length === 0) && (
+                                                    <p className="text-[9px] text-gray-400 text-center py-2">No options yet. Click + Add.</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </>)}
+
+                                    {/* Radio options */}
+                                    {ft === 'radio' && (<>
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <span className={labelCls}>Options</span>
+                                                <button
+                                                    onClick={() => updateFm({ options: [...(fm.options || []), { label: `Option ${(fm.options || []).length + 1}`, value: `option${(fm.options || []).length + 1}` }] })}
+                                                    className="text-[8px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors"
+                                                >+ Add</button>
+                                            </div>
+                                            <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto">
+                                                {(fm.options || []).map((opt: any, i: number) => (
+                                                    <div key={i} className="flex items-center gap-1.5">
+                                                        <input
+                                                            type="text"
+                                                            value={opt.label}
+                                                            onChange={e => {
+                                                                const opts = [...(fm.options || [])];
+                                                                opts[i] = { ...opts[i], label: e.target.value, value: e.target.value.toLowerCase().replace(/\s+/g, '_') };
+                                                                updateFm({ options: opts });
+                                                            }}
+                                                            className={`${inputCls} flex-1`}
+                                                            placeholder={`Option ${i + 1}`}
+                                                        />
+                                                        <button
+                                                            onClick={() => updateFm({ options: (fm.options || []).filter((_: any, j: number) => j !== i) })}
+                                                            className="w-5 h-5 flex items-center justify-center rounded text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors shrink-0"
+                                                        ><span className="material-symbols-outlined text-[12px]">close</span></button>
+                                                    </div>
+                                                ))}
+                                                {(!fm.options || fm.options.length === 0) && (
+                                                    <p className="text-[9px] text-gray-400 text-center py-2">No options yet. Click + Add.</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Default Selected</span>
+                                            <select value={fm.defaultValue || ''} onChange={e => updateFm({ defaultValue: e.target.value })} className={inputCls}>
+                                                <option value="">None</option>
+                                                {(fm.options || []).map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Direction</span>
+                                            <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                                                {(['vertical', 'horizontal'] as const).map(dir => (
+                                                    <button key={dir} onClick={() => updateFm({ direction: dir })}
+                                                        className={`flex-1 py-1 text-[9px] font-black uppercase rounded-md transition-all ${fm.direction === dir || (!fm.direction && dir === 'vertical') ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>{dir}</button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>)}
+
+                                    {/* Form button: full width toggle */}
+                                    {ft === 'form-button' && (
+                                        <div className="flex items-center justify-between">
+                                            <span className={labelCls}>Full Width</span>
+                                            <Toggle value={fm.fullWidth !== false} onChange={() => updateFm({ fullWidth: !(fm.fullWidth !== false) })} />
+                                        </div>
+                                    )}
+
+                                    {/* Required + Disabled */}
+                                    {ft !== 'form-button' && (
+                                    <div className="flex items-center justify-between">
+                                        <span className={labelCls}>Required</span>
+                                        <Toggle value={!!fm.required} onChange={() => updateFm({ required: !fm.required })} />
+                                    </div>
+                                    )}
+                                    <div className="flex items-center justify-between">
+                                        <span className={labelCls}>Disabled</span>
+                                        <Toggle value={!!fm.disabled} onChange={() => updateFm({ disabled: !fm.disabled })} />
+                                    </div>
+                                </div>
+
+                                {/* ── Display ── (not for checkbox, radio, form-button) */}
+                                {ft !== 'checkbox' && ft !== 'form-button' && (
+                                    <div className={sectionCls}>
+                                        <span className={labelCls}>Display</span>
+
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Label Position</span>
+                                            <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                                                {(['top', 'left', 'none'] as const).map(pos => (
+                                                    <button key={pos} onClick={() => updateFm({ labelPosition: pos, showLabel: pos !== 'none' })}
+                                                        className={`flex-1 py-1 text-[9px] font-black uppercase rounded-md transition-all ${fm.labelPosition === pos ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>{pos}</button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Prefix / Suffix for text-input, email-input, number-input */}
+                                        {(ft === 'text-input' || ft === 'email-input' || ft === 'number-input') && (
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div className="flex flex-col gap-1">
+                                                    <span className={labelCls}>Prefix</span>
+                                                    <input type="text" value={fm.prefix || ''} onChange={e => updateFm({ prefix: e.target.value })} className={inputCls} placeholder="$" />
+                                                </div>
+                                                <div className="flex flex-col gap-1">
+                                                    <span className={labelCls}>Suffix</span>
+                                                    <input type="text" value={fm.suffix || ''} onChange={e => updateFm({ suffix: e.target.value })} className={inputCls} placeholder="kg" />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Email icon toggle */}
+                                        {ft === 'email-input' && (
+                                            <div className="flex items-center justify-between">
+                                                <span className={labelCls}>Show @ Icon</span>
+                                                <Toggle value={fm.showIcon !== false} onChange={() => updateFm({ showIcon: !(fm.showIcon !== false) })} />
+                                            </div>
+                                        )}
+
+                                        {/* Number steppers */}
+                                        {ft === 'number-input' && (
+                                            <div className="flex items-center justify-between">
+                                                <span className={labelCls}>Show Steppers</span>
+                                                <Toggle value={fm.showSteppers !== false} onChange={() => updateFm({ showSteppers: !(fm.showSteppers !== false) })} />
+                                            </div>
+                                        )}
+
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Helper Text</span>
+                                            <input type="text" value={fm.helperText || ''} onChange={e => updateFm({ helperText: e.target.value })} className={inputCls} placeholder="Optional hint" />
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Error Message</span>
+                                            <input type="text" value={fm.errorMessage || ''} onChange={e => updateFm({ errorMessage: e.target.value })} className={inputCls} placeholder="This field is required" />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ── Form Submission (form-button only) ── */}
+                                {ft === 'form-button' && (() => {
+                                    const currentStage = stages.find(s => s.id === selectedStageId);
+                                    const stageFormInputs = (currentStage?.layers || []).reduce<{ id: string; name: string; formType: string; hasName: boolean }[]>((acc, l) => {
+                                        if (l.type !== 'form-input') return acc;
+                                        try {
+                                            const m = JSON.parse(l.variant || '{}');
+                                            if (m.formType !== 'form-button') acc.push({ id: l.id, name: m.name || m.label || m.formType, formType: m.formType, hasName: !!m.name });
+                                        } catch {}
+                                        return acc;
+                                    }, []);
+                                    const submitFields: string[] = Array.isArray(fm.submitFields) ? fm.submitFields : stageFormInputs.map(f => f.name);
+                                    return (
+                                        <div className={sectionCls}>
+                                            <span className={labelCls}>Form Submission</span>
+
+                                            {/* Endpoint */}
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Endpoint URL</span>
+                                                <input type="text" value={fm.endpoint || ''} onChange={e => updateFm({ endpoint: e.target.value })} className={inputCls} placeholder="https://api.example.com/submit" />
+                                            </div>
+
+                                            {/* Method */}
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Method</span>
+                                                <div className="flex bg-gray-100 p-0.5 rounded-lg gap-px">
+                                                    {['GET','POST','PUT','PATCH','DELETE'].map(m => (
+                                                        <button key={m} onClick={() => updateFm({ method: m })}
+                                                            className={`flex-1 py-1 text-[7px] font-black uppercase rounded-md transition-all ${(fm.method || 'POST') === m ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>{m}</button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Format */}
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Data Format</span>
+                                                <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                                                    {[['json','JSON'],['xml','XML']].map(([val, lbl]) => (
+                                                        <button key={val} onClick={() => updateFm({ submitFormat: val })}
+                                                            className={`flex-1 py-1 text-[9px] font-black uppercase rounded-md transition-all ${(fm.submitFormat || 'json') === val ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>{lbl}</button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Field Mapping */}
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Fields</span>
+                                                <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                                                    {stageFormInputs.length === 0 && (
+                                                        <p className="text-[9px] text-gray-400 py-1 text-center">No form elements on this stage yet.</p>
+                                                    )}
+                                                    {[...stageFormInputs].sort((a, b) => a.name.localeCompare(b.name)).map(f => {
+                                                        const isIncluded = submitFields.includes(f.name);
+                                                        const typeLabel = TITLES[f.formType] || f.formType;
+                                                        return (
+                                                            <div key={f.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-all ${isIncluded ? 'border-primary/20 bg-primary/5' : 'border-gray-100 bg-gray-50'}`}>
+                                                                <span className={`material-symbols-outlined text-[11px] ${isIncluded ? 'text-primary' : 'text-gray-300'}`}>{ICONS[f.formType] || 'input'}</span>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <span className={`text-[9px] font-bold truncate block ${f.hasName ? 'text-gray-800' : 'text-gray-400 italic'}`}>{f.name}</span>
+                                                                </div>
+                                                                <span className="text-[8px] text-gray-400 bg-gray-100 rounded px-1.5 py-0.5 font-semibold shrink-0">{typeLabel}</span>
+                                                                {!f.hasName && <span className="material-symbols-outlined text-[10px] text-amber-400" title="Field Name not set">warning</span>}
+                                                                <Toggle value={isIncluded} onChange={() => {
+                                                                    updateFm({ submitFields: isIncluded ? submitFields.filter(n => n !== f.name) : [...submitFields, f.name] });
+                                                                }} />
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            {/* Messages */}
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Success Message</span>
+                                                <input type="text" value={fm.successMessage || ''} onChange={e => updateFm({ successMessage: e.target.value })} className={inputCls} placeholder="Form submitted!" />
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Error Message</span>
+                                                <input type="text" value={fm.errorMessage || ''} onChange={e => updateFm({ errorMessage: e.target.value })} className={inputCls} placeholder="Something went wrong" />
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* ── Style ── */}
+                                <div className={`${sectionCls} border-b-0 pb-4`}>
+                                    <span className={labelCls}>Style</span>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Font Size</span>
+                                            <input type="number" min="8" max="48" value={fm.fontSize || '14'} onChange={e => updateFm({ fontSize: e.target.value })} className={numInputCls} />
+                                        </div>
+                                        {ft !== 'checkbox' && ft !== 'radio' && (
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Border Radius</span>
+                                                <input type="number" min="0" max="32" value={fm.borderRadius || '8'} onChange={e => updateFm({ borderRadius: e.target.value })} className={numInputCls} />
+                                            </div>
+                                        )}
+                                        {ft === 'checkbox' && (
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Check Color</span>
+                                                <label className="relative cursor-pointer w-full">
+                                                    <div className="w-full h-7 rounded-lg border border-gray-100 overflow-hidden" style={{ backgroundColor: fm.checkboxColor || '#136c6c' }} />
+                                                    <input type="color" value={fm.checkboxColor || '#136c6c'} onChange={e => updateFm({ checkboxColor: e.target.value })} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                                                </label>
+                                            </div>
+                                        )}
+                                        {ft === 'radio' && (
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Radio Color</span>
+                                                <label className="relative cursor-pointer w-full">
+                                                    <div className="w-full h-7 rounded-lg border border-gray-100 overflow-hidden" style={{ backgroundColor: fm.radioColor || '#136c6c' }} />
+                                                    <input type="color" value={fm.radioColor || '#136c6c'} onChange={e => updateFm({ radioColor: e.target.value })} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                                                </label>
+                                            </div>
+                                        )}
+                                        {ft === 'form-button' && (
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Border Radius</span>
+                                                <input type="number" min="0" max="32" value={fm.borderRadius || '8'} onChange={e => updateFm({ borderRadius: e.target.value })} className={numInputCls} />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {ft === 'form-button' && <ColorRow keyName="buttonColor" label="Button Color" />}
+                                    {ft !== 'checkbox' && ft !== 'radio' && ft !== 'form-button' && <ColorRow keyName="borderColor" label="Border Color" />}
+                                    {ft !== 'checkbox' && ft !== 'radio' && ft !== 'form-button' && <ColorRow keyName="backgroundColor" label="Background" />}
+                                    <ColorRow keyName="textColor" label="Text Color" />
+                                    {ft !== 'checkbox' && ft !== 'radio' && ft !== 'form-button' && <ColorRow keyName="labelColor" label="Label Color" />}
+                                </div>
+
+                                {/* ── Dropdown Style (select only) ── */}
+                                {ft === 'select' && (
+                                    <div className={`${sectionCls} border-b-0 pb-4`}>
+                                        <span className={labelCls}>Dropdown Style</span>
+
+                                        <div className="flex items-center justify-between">
+                                            <span className={labelCls}>Show Shadow</span>
+                                            <Toggle value={fm.dropdownShadow !== false} onChange={() => updateFm({ dropdownShadow: !(fm.dropdownShadow !== false) })} />
+                                        </div>
+
+                                        <div className="flex flex-col gap-1">
+                                            <span className={labelCls}>Dropdown Radius</span>
+                                            <input type="number" min="0" max="32" value={fm.dropdownRadius || '8'} onChange={e => updateFm({ dropdownRadius: e.target.value })} className={numInputCls} />
+                                        </div>
+
+                                        <ColorRow keyName="optionBg" label="Option Background" />
+                                        <ColorRow keyName="optionText" label="Option Text" />
+
+                                        <div className="pt-1 border-t border-gray-50 flex flex-col gap-2">
+                                            <span className={`${labelCls} text-gray-300`}>On Hover</span>
+                                            <ColorRow keyName="optionHoverBg" label="Hover Background" />
+                                            <ColorRow keyName="optionHoverText" label="Hover Text" />
+                                        </div>
+
+                                        <div className="pt-1 border-t border-gray-50 flex flex-col gap-2">
+                                            <span className={`${labelCls} text-gray-300`}>Selected</span>
+                                            <ColorRow keyName="optionSelectedBg" label="Selected Background" />
+                                        </div>
+                                    </div>
+                                )}
+
+                            </div>
                         </div>
                     );
                 })()}

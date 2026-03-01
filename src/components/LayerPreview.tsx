@@ -193,7 +193,8 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
     const hasFocused = React.useRef(false);
     const contentRef = React.useRef<HTMLDivElement>(null);
     const videoRef = React.useRef<HTMLVideoElement>(null);
-    const [interactionAnim, setInteractionAnim] = React.useState<{ active: boolean; phase: string | null } | null>(null);
+    const [interactionAnim, setInteractionAnim] = React.useState<{ active: boolean; phase: string | null; reversed?: boolean; restartKey: number } | null>(null);
+    const longPressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const [localAnimTime, setLocalAnimTime] = React.useState(0);
     const localRafRef = React.useRef<number | null>(null);
     const localAnimTimeRef = React.useRef(0);
@@ -293,6 +294,37 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
             }
         };
     }, [interactionAnim?.active, interactionAnim?.phase, stageDuration, layer.id, layer.animation?.entry?.start, layer.animation?.main?.start, layer.animation?.exit?.start]);
+
+    // Custom select dropdown state
+    const [selectOpen, setSelectOpen] = React.useState(false);
+    const [selectValue, setSelectValue] = React.useState('');
+    const selectRef = React.useRef<HTMLDivElement>(null);
+    React.useEffect(() => {
+        if (!selectOpen) return;
+        const handleClose = (e: MouseEvent) => {
+            if (selectRef.current && !selectRef.current.contains(e.target as Node)) {
+                setSelectOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClose);
+        return () => document.removeEventListener('mousedown', handleClose);
+    }, [selectOpen]);
+
+    // Form element interactive state (for preview mode + submission)
+    const [formTextValue, setFormTextValue] = React.useState('');
+    const [formCheckboxChecked, setFormCheckboxChecked] = React.useState(false);
+    const [formRadioValue, setFormRadioValue] = React.useState('');
+    React.useEffect(() => {
+        if (layer.type !== 'form-input') return;
+        try {
+            const m = JSON.parse(layer.variant || '{}');
+            setFormTextValue(m.defaultValue || '');
+            setFormCheckboxChecked(!!m.defaultChecked);
+            setFormRadioValue(m.defaultValue || '');
+            setSelectOpen(false);
+            setSelectValue(m.defaultValue || '');
+        } catch {}
+    }, [layer.id]);
 
     const [videoPlayState, setVideoPlayState] = React.useState(false);
     const [videoMuted, setVideoMuted] = React.useState(true);
@@ -1503,25 +1535,26 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
         const lowAction = String(action || '').toLowerCase();
         
         if (lowAction.includes('entry') || lowAction.includes('inbound')) {
-            setInteractionAnim({ active: true, phase: 'entry' });
+            setInteractionAnim(prev => ({ active: true, phase: 'entry', restartKey: (prev?.restartKey ?? 0) + 1 }));
         } else if (lowAction.includes('main') || lowAction.includes('middle') || lowAction.includes('mid') || lowAction.includes('loop')) {
-            setInteractionAnim({ active: true, phase: 'main' });
+            setInteractionAnim(prev => ({ active: true, phase: 'main', restartKey: (prev?.restartKey ?? 0) + 1 }));
         } else if (lowAction.includes('exit') || lowAction.includes('outbound')) {
-            setInteractionAnim({ active: true, phase: 'exit' });
+            setInteractionAnim(prev => ({ active: true, phase: 'exit', restartKey: (prev?.restartKey ?? 0) + 1 }));
         } else if (lowAction.includes('all') || lowAction.includes('full') || lowAction.includes('sequence')) {
-            setInteractionAnim({ active: true, phase: 'all' });
+            setInteractionAnim(prev => ({ active: true, phase: 'all', restartKey: (prev?.restartKey ?? 0) + 1 }));
         } else if (lowAction.includes('toggle')) {
             setInteractionAnim(prev => {
-                if (prev?.active) return { active: false, phase: null };
-                // Determine phase to play
+                if (prev?.active) return { active: false, phase: null, restartKey: prev.restartKey };
                 let phaseToPlay: any = 'all';
                 if (lowAction.includes('entry')) phaseToPlay = 'entry';
                 else if (lowAction.includes('main') || lowAction.includes('loop')) phaseToPlay = 'main';
                 else if (lowAction.includes('exit')) phaseToPlay = 'exit';
-                return { active: true, phase: phaseToPlay };
+                return { active: true, phase: phaseToPlay, restartKey: (prev?.restartKey ?? 0) + 1 };
             });
+        } else if (action === 'reverse') {
+            setInteractionAnim(prev => ({ active: true, phase: prev?.phase || 'all', reversed: true, restartKey: (prev?.restartKey ?? 0) + 1 }));
         } else if (action === 'stop' || action === 'reset' || lowAction.includes('stop')) {
-            setInteractionAnim({ active: false, phase: null });
+            setInteractionAnim(prev => ({ active: false, phase: null, restartKey: prev?.restartKey ?? 0 }));
         } else if (action === 'pause') {
             setInteractionAnim(prev => prev ? { ...prev, active: false } : null);
         } else if (action === 'resume') {
@@ -1600,20 +1633,23 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
         prevActionStatesRef.current = { ...actionStates };
     }, [actionStates, stageActions, layer.id]);
 
-    const handleActionTrigger = (type: 'click' | 'mouseenter' | 'mouseleave') => {
+    const handleActionTrigger = (type: 'click' | 'mouseenter' | 'mouseleave' | 'dblclick' | 'focus' | 'blur') => {
         console.log(`[LayerPreview] handleActionTrigger (type: ${type}) for layer ${layer.id} (${layer.name})`);
         // Fire layer interactionActions (per-layer animation triggers)
         layer.interactionActions?.forEach(ia => {
             const matches =
                 (type === 'click'      && ia.event === 'click') ||
+                (type === 'dblclick'   && ia.event === 'dblclick') ||
                 (type === 'mouseenter' && ia.event === 'hover') ||
-                (type === 'mouseleave' && ia.event === 'hoverEnd');
+                (type === 'mouseleave' && ia.event === 'hoverEnd') ||
+                (type === 'focus'      && ia.event === 'focus') ||
+                (type === 'blur'       && ia.event === 'blur');
             if (matches && (isPreviewMode || isInteractive)) {
                 console.log(`[LayerPreview] Found matching interaction action: ${ia.action} targeting ${ia.targetLayerId || 'self'}, includeChildren: ${!!ia.includeChildren}`);
-                fireInteraction({ 
-                    targetLayerId: ia.targetLayerId, 
-                    action: ia.action as AnimationTriggerAction, 
-                    includeChildren: !!ia.includeChildren 
+                fireInteraction({
+                    targetLayerId: ia.targetLayerId,
+                    action: ia.action as AnimationTriggerAction,
+                    includeChildren: !!ia.includeChildren
                 });
             }
         });
@@ -1649,21 +1685,20 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
         });
     };
 
-    // IntersectionObserver for scroll-into-view trigger
+    // IntersectionObserver for scroll-into-view and scroll-out-view triggers
     React.useEffect(() => {
-        const scrollTrigger = layer.interactionActions?.find(a => a.event === 'scroll-into-view');
-        if (!scrollTrigger || (!isPreviewMode && !isInteractive)) return;
+        const scrollInTrigger  = layer.interactionActions?.find(a => a.event === 'scroll-into-view');
+        const scrollOutTrigger = layer.interactionActions?.find(a => a.event === 'scroll-out-view');
+        if (!scrollInTrigger && !scrollOutTrigger) return;
+        if (!isPreviewMode && !isInteractive) return;
         const el = document.getElementById(layer.id);
         if (!el) return;
         const observer = new IntersectionObserver(([entry]) => {
-            if (entry.isIntersecting) {
-                if (scrollTrigger.targetLayerId && scrollTrigger.targetLayerId !== layer.id) {
-                    document.dispatchEvent(new CustomEvent('layer:interaction', {
-                        detail: { targetLayerId: scrollTrigger.targetLayerId, action: scrollTrigger.action, includeChildren: scrollTrigger.includeChildren }
-                    }));
-                } else {
-                    handleInteractionAction(scrollTrigger.action as AnimationTriggerAction, scrollTrigger.includeChildren);
-                }
+            if (entry.isIntersecting && scrollInTrigger) {
+                fireInteraction({ targetLayerId: scrollInTrigger.targetLayerId, action: scrollInTrigger.action as AnimationTriggerAction, includeChildren: scrollInTrigger.includeChildren });
+            }
+            if (!entry.isIntersecting && scrollOutTrigger) {
+                fireInteraction({ targetLayerId: scrollOutTrigger.targetLayerId, action: scrollOutTrigger.action as AnimationTriggerAction, includeChildren: scrollOutTrigger.includeChildren });
             }
         }, { threshold: 0.15 });
         observer.observe(el);
@@ -1671,9 +1706,58 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [layer.interactionActions, layer.id, isPreviewMode, isInteractive]);
 
+    // Keydown document listener
+    React.useEffect(() => {
+        const keyTriggers = layer.interactionActions?.filter(a => a.event === 'keydown') ?? [];
+        if (!keyTriggers.length || (!isPreviewMode && !isInteractive)) return;
+        const handler = (e: KeyboardEvent) => {
+            keyTriggers.forEach(t => {
+                if (!t.keyCode || e.code === t.keyCode) {
+                    fireInteraction({ targetLayerId: t.targetLayerId, action: t.action as AnimationTriggerAction, includeChildren: t.includeChildren });
+                }
+            });
+        };
+        document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [layer.interactionActions, isPreviewMode, isInteractive]);
+
+    // Idle activity tracker
+    React.useEffect(() => {
+        const idleTrigger = layer.interactionActions?.find(a => a.event === 'idle');
+        if (!idleTrigger || (!isPreviewMode && !isInteractive)) return;
+        const seconds = idleTrigger.idleSeconds ?? 3;
+        let idleTimer: ReturnType<typeof setTimeout>;
+        const resetTimer = () => {
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => {
+                fireInteraction({ targetLayerId: idleTrigger.targetLayerId, action: idleTrigger.action as AnimationTriggerAction, includeChildren: idleTrigger.includeChildren });
+            }, seconds * 1000);
+        };
+        const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'] as const;
+        activityEvents.forEach(ev => document.addEventListener(ev, resetTimer));
+        resetTimer();
+        return () => {
+            clearTimeout(idleTimer);
+            activityEvents.forEach(ev => document.removeEventListener(ev, resetTimer));
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [layer.interactionActions, isPreviewMode, isInteractive]);
+
+    const startLongPress = () => {
+        const t = layer.interactionActions?.find(a => a.event === 'long-press');
+        if (!t || (!isPreviewMode && !isInteractive)) return;
+        longPressTimer.current = setTimeout(() => {
+            fireInteraction({ targetLayerId: t.targetLayerId, action: t.action as AnimationTriggerAction, includeChildren: t.includeChildren });
+        }, 500);
+    };
+    const cancelLongPress = () => {
+        if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    };
+
     const handleClick = (e: React.MouseEvent) => {
-        if (e.button !== 0) return; 
-        
+        if (e.button !== 0) return;
+
         // Allow propagation only in preview/interactive mode so parents (groups) can also trigger their actions
         if (!isPreviewMode && !isInteractive) {
             e.stopPropagation();
@@ -1696,6 +1780,7 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
     };
 
     const handleDoubleClick = (e: React.MouseEvent) => {
+        handleActionTrigger('dblclick');
         if (!onLayerClick) return;
         e.stopPropagation();
         onLayerClick(layer.id, stageId, true, false);
@@ -1854,15 +1939,16 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
         alignSelf: isChildOfAutoLayout ? ((containerStyle as any).alignSelf ?? 'auto') : undefined,
         zIndex: containerStyle.zIndex,
         transition: 'none !important',
-        animationName: rawAnim ? `kf-${animName}` : 'none',
+        animationName: rawAnim ? `kf-${animName}-${interactionAnim?.restartKey ?? 0}` : 'none',
         animationDuration: '1s',
         animationTimingFunction: 'linear',
         animationFillMode: 'forwards',
-        animationDelay: (rawAnim || interactionAnim?.active) ? `-${progress}s` : '0s',
+        animationDelay: interactionAnim?.reversed ? '0s' : ((rawAnim || interactionAnim?.active) ? `-${progress}s` : '0s'),
         animationIterationCount: interactionAnim?.active
             ? (layer.animationLoopCount === 0 ? 'infinite' : (layer.animationLoopCount ?? 1))
             : 1,
         animationPlayState: interactionAnim?.active ? 'running' : 'paused',
+        animationDirection: interactionAnim?.reversed ? 'reverse' : 'normal',
         // Critical: Ensure the wrapper (which might have a CSS animation) uses the correct origin
         transformOrigin: (effectiveStyles as any)?.transformOrigin,
         transformStyle: 'preserve-3d',
@@ -1877,27 +1963,31 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
 
     const renderRawStyle = () => {
         if (!rawAnim || !animName) return null;
-        return <style>{rawAnim.replace(new RegExp(`@keyframes ${animName}`, 'g'), `@keyframes kf-${animName}`).replace(new RegExp(`@-webkit-keyframes ${animName}`, 'g'), `@-webkit-keyframes kf-${animName}`)}</style>;
+        const sfx = `-${interactionAnim?.restartKey ?? 0}`;
+        return <style>{rawAnim.replace(new RegExp(`@keyframes ${animName}`, 'g'), `@keyframes kf-${animName}${sfx}`).replace(new RegExp(`@-webkit-keyframes ${animName}`, 'g'), `@-webkit-keyframes kf-${animName}${sfx}`)}</style>;
     };
 
     const renderRawTextStyle = () => {
         if (!textRawAnim || !textAnimName) return null;
-        return <style>{textRawAnim.replace(new RegExp(`@keyframes ${textAnimName}`, 'g'), `@keyframes tkf-${textAnimName}`).replace(new RegExp(`@-webkit-keyframes ${textAnimName}`, 'g'), `@-webkit-keyframes tkf-${textAnimName}`)}</style>;
+        const sfx = `-${interactionAnim?.restartKey ?? 0}`;
+        return <style>{textRawAnim.replace(new RegExp(`@keyframes ${textAnimName}`, 'g'), `@keyframes tkf-${textAnimName}${sfx}`).replace(new RegExp(`@-webkit-keyframes ${textAnimName}`, 'g'), `@-webkit-keyframes tkf-${textAnimName}${sfx}`)}</style>;
     };
 
     const getExtraTextProps = () => {
         if (!textRawAnim) return {};
+        const sfx = `-${interactionAnim?.restartKey ?? 0}`;
         return {
             style: {
-                animationName: `tkf-${textAnimName}`,
+                animationName: `tkf-${textAnimName}${sfx}`,
                 animationDuration: '1s',
                 animationTimingFunction: 'linear',
                 animationFillMode: 'forwards',
-                animationDelay: (textRawAnim || interactionAnim?.active) ? `-${textProgress}s` : '0s',
+                animationDelay: interactionAnim?.reversed ? '0s' : ((textRawAnim || interactionAnim?.active) ? `-${textProgress}s` : '0s'),
                 animationIterationCount: interactionAnim?.active
                     ? (layer.animationLoopCount === 0 ? 'infinite' : (layer.animationLoopCount ?? 1))
                     : 1,
                 animationPlayState: interactionAnim?.active ? 'running' : 'paused',
+                animationDirection: interactionAnim?.reversed ? 'reverse' : 'normal',
                 transformOrigin: (textEffectiveStyles as any)?.transformOrigin,
             }
         };
@@ -1935,6 +2025,7 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                     id={layer.id}
                     className={`${isChildOfAutoLayout ? 'relative' : 'absolute'} ${isEditing ? 'select-text z-[400]' : 'select-none'} ${isSelected ? 'z-[300]' : ''}`}
                     style={{ ...containerStyle, cursor: cursor || (isEditing ? 'text' : (isTextToolActive ? 'text' : 'pointer')) }}
+                    tabIndex={layer.interactionActions?.some(a => a.event === 'focus' || a.event === 'blur') ? 0 : undefined}
                     onClick={handleClick}
                     onDoubleClick={handleDoubleClick}
                     onMouseEnter={() => {
@@ -1943,24 +2034,31 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                     }}
                     onMouseLeave={() => {
                         handleActionTrigger('mouseleave');
+                        cancelLongPress();
                         onHover?.(null);
                     }}
-                    onTouchStart={() => {
+                    onFocus={() => handleActionTrigger('focus')}
+                    onBlur={() => handleActionTrigger('blur')}
+                    onTouchStart={(e) => {
+                        startLongPress();
                         const t = layer.interactionActions?.find(a => a.event === 'touchStart');
-                        if (t && (isPreviewMode || isInteractive)) fireInteraction({ targetLayerId: t.targetLayerId, action: t.action as AnimationTriggerAction });
+                        if (t && (isPreviewMode || isInteractive)) { e.preventDefault(); fireInteraction({ targetLayerId: t.targetLayerId, action: t.action as AnimationTriggerAction }); }
                     }}
                     onTouchEnd={() => {
+                        cancelLongPress();
                         const t = layer.interactionActions?.find(a => a.event === 'touchEnd');
                         if (t && (isPreviewMode || isInteractive)) fireInteraction({ targetLayerId: t.targetLayerId, action: t.action as AnimationTriggerAction });
                     }}
-                onMouseDown={(e) => {
-                    if (isEditing) {
-                        e.stopPropagation();
-                        return;
-                    }
-                    if (!isTextToolActive) e.stopPropagation();
-                    onMouseDown?.(e, layer.id);
-                }}
+                    onMouseDown={(e) => {
+                        startLongPress();
+                        if (isEditing) {
+                            e.stopPropagation();
+                            return;
+                        }
+                        if (!isTextToolActive) e.stopPropagation();
+                        onMouseDown?.(e, layer.id);
+                    }}
+                    onMouseUp={() => cancelLongPress()}
                     onContextMenu={(e) => {
                         e.stopPropagation();
                         onContextMenu?.(e);
@@ -2086,6 +2184,425 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                         align-items: var(--a-ai) !important;
                     }
                 `}</style>
+                </div>
+            </div>
+        );
+    }
+
+    if (layer.type === 'form-input') {
+        const fm = meta as any;
+        const ft: string = fm.formType || 'text-input';
+        const borderRadius = `${fm.borderRadius ?? 8}px`;
+        const borderColor = fm.errorMessage ? '#ef4444' : (fm.borderColor || '#e5e7eb');
+        const bg = fm.backgroundColor || '#ffffff';
+        const textCol = fm.textColor || '#111827';
+        const labelCol = fm.labelColor || '#374151';
+        const fs = `${fm.fontSize ?? 14}px`;
+        const baseFont = 'system-ui, sans-serif';
+
+        const sharedInputStyle: React.CSSProperties = {
+            flex: 1, border: 'none', outline: 'none', background: 'transparent',
+            color: textCol, fontSize: fs, fontFamily: baseFont,
+            padding: '0 10px', minWidth: 0,
+            cursor: isPreviewMode ? 'text' : 'default',
+        };
+
+        const wrapHandlers = {
+            onClick: handleClick,
+            onDoubleClick: handleDoubleClick,
+            onMouseEnter: () => { handleActionTrigger('mouseenter'); onHover?.(layer.id); },
+            onMouseLeave: () => { handleActionTrigger('mouseleave'); cancelLongPress(); onHover?.(null); },
+            onFocus: () => handleActionTrigger('focus'),
+            onBlur: () => handleActionTrigger('blur'),
+            onTouchStart: (e: React.TouchEvent) => {
+                startLongPress();
+                const t = layer.interactionActions?.find(a => a.event === 'touchStart');
+                if (t && (isPreviewMode || isInteractive)) { e.preventDefault(); fireInteraction({ targetLayerId: t.targetLayerId, action: t.action as AnimationTriggerAction }); }
+            },
+            onTouchEnd: () => {
+                cancelLongPress();
+                const t = layer.interactionActions?.find(a => a.event === 'touchEnd');
+                if (t && (isPreviewMode || isInteractive)) fireInteraction({ targetLayerId: t.targetLayerId, action: t.action as AnimationTriggerAction });
+            },
+            onMouseDown: (e: React.MouseEvent) => { if (!isPreviewMode && !isInteractive) { e.stopPropagation(); onMouseDown?.(e, layer.id); } },
+        };
+
+        // Shared label renderer
+        const renderLabel = () => fm.showLabel !== false && fm.labelPosition !== 'none' && (
+            <label style={{ fontSize: '11px', fontWeight: 600, color: labelCol, fontFamily: baseFont, pointerEvents: 'none', userSelect: 'none', lineHeight: 1.4 }}>
+                {fm.label || 'Label'}
+                {fm.required && <span style={{ color: '#ef4444', marginLeft: '3px' }}>*</span>}
+            </label>
+        );
+
+        // Shared helper/error renderer
+        const renderHelper = () => (fm.errorMessage || fm.helperText) && (
+            <span style={{ fontSize: '10px', color: fm.errorMessage ? '#ef4444' : '#9ca3af', fontFamily: baseFont, pointerEvents: 'none', lineHeight: 1.3 }}>
+                {fm.errorMessage || fm.helperText}
+            </span>
+        );
+
+        // Shared input box wrapper
+        const inputBoxStyle: React.CSSProperties = {
+            display: 'flex', alignItems: 'center',
+            border: `1.5px solid ${borderColor}`, borderRadius,
+            backgroundColor: bg, overflow: 'hidden',
+            flex: 1, minHeight: '34px', transition: 'border-color 0.15s',
+        };
+
+        // Prefix / Suffix shared
+        const prefixEl = fm.prefix && (
+            <span style={{ padding: '0 8px', fontSize: fs, color: '#9ca3af', fontFamily: baseFont, whiteSpace: 'nowrap', borderRight: `1px solid ${borderColor}`, alignSelf: 'stretch', display: 'flex', alignItems: 'center' }}>
+                {fm.prefix}
+            </span>
+        );
+        const suffixEl = fm.suffix && (
+            <span style={{ padding: '0 8px', fontSize: fs, color: '#9ca3af', fontFamily: baseFont, whiteSpace: 'nowrap', borderLeft: `1px solid ${borderColor}`, alignSelf: 'stretch', display: 'flex', alignItems: 'center' }}>
+                {fm.suffix}
+            </span>
+        );
+
+        const renderInputContent = () => {
+            // ── Checkbox ───────────────────────────────────────────
+            if (ft === 'checkbox') {
+                const checkColor = fm.checkboxColor || '#136c6c';
+                const cbChecked = isPreviewMode ? formCheckboxChecked : !!fm.defaultChecked;
+                return (
+                    <div
+                        data-form-field="" data-form-stage={stageId}
+                        data-form-name={fm.name || ''} data-form-value={String(cbChecked)}
+                        style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', width: '100%', cursor: isPreviewMode && !fm.disabled ? 'pointer' : 'default' }}
+                        onClick={isPreviewMode && !fm.disabled ? (e) => {
+                            e.stopPropagation();
+                            setFormCheckboxChecked(v => !v);
+                        } : undefined}
+                    >
+                        <div style={{
+                            width: '16px', height: '16px', flexShrink: 0, marginTop: '2px',
+                            border: `2px solid ${cbChecked ? checkColor : borderColor}`,
+                            borderRadius: '4px', backgroundColor: cbChecked ? checkColor : bg,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'background-color 0.15s, border-color 0.15s',
+                        }}>
+                            {cbChecked && <span style={{ color: '#fff', fontSize: '10px', lineHeight: 1 }}>✓</span>}
+                        </div>
+                        <span style={{ fontSize: fs, color: textCol, fontFamily: baseFont, lineHeight: '1.4', userSelect: 'none' }}>
+                            {fm.label || 'Checkbox label'}
+                            {fm.required && <span style={{ color: '#ef4444', marginLeft: '3px' }}>*</span>}
+                            {fm.linkText && (
+                                <span style={{ color: checkColor, marginLeft: '4px', textDecoration: 'underline', cursor: 'pointer' }}>{fm.linkText}</span>
+                            )}
+                        </span>
+                    </div>
+                );
+            }
+
+            // ── Select / Dropdown (custom, fully styleable) ────────
+            if (ft === 'select') {
+                const opts: { label: string; value: string }[] = fm.options || [];
+                const optBg        = fm.optionBg        || '#ffffff';
+                const optText      = fm.optionText      || textCol;
+                const optHoverBg   = fm.optionHoverBg   || '#f0fdf4';
+                const optHoverText = fm.optionHoverText || '#136c6c';
+                const optSelBg     = fm.optionSelectedBg || '#e6f4f1';
+                const dropRadius   = `${fm.dropdownRadius ?? fm.borderRadius ?? 8}px`;
+                const dropShadow   = fm.dropdownShadow !== false;
+
+                const effectiveValue = selectValue || fm.defaultValue || '';
+                const selOpt = opts.find(o => o.value === effectiveValue);
+                const displayText = selOpt ? selOpt.label : (fm.placeholder || 'Choose...');
+                const hasValue = !!selOpt;
+
+                const selSubmitVal = isPreviewMode ? (selectValue || fm.defaultValue || '') : (fm.defaultValue || '');
+                return (
+                    <div ref={selectRef}
+                        data-form-field="" data-form-stage={stageId}
+                        data-form-name={fm.name || ''} data-form-value={selSubmitVal}
+                        style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', position: 'relative' }}
+                    >
+                        {renderLabel()}
+                        {/* Trigger */}
+                        <div
+                            style={{
+                                ...inputBoxStyle,
+                                justifyContent: 'space-between',
+                                paddingRight: '10px',
+                                cursor: isPreviewMode && !fm.disabled ? 'pointer' : 'default',
+                                userSelect: 'none',
+                                opacity: fm.disabled ? 0.5 : 1,
+                            }}
+                            onMouseDown={(e) => {
+                                if (!isPreviewMode || fm.disabled) return;
+                                e.stopPropagation();
+                                setSelectOpen(o => !o);
+                            }}
+                        >
+                            <span style={{ ...sharedInputStyle, color: hasValue ? textCol : '#9ca3af' }}>
+                                {displayText}
+                            </span>
+                            <span style={{
+                                fontSize: '14px', color: '#9ca3af', lineHeight: 1, flexShrink: 0,
+                                transform: selectOpen ? 'rotate(180deg)' : 'none',
+                                transition: 'transform 0.15s',
+                                pointerEvents: 'none',
+                            }}>▾</span>
+                        </div>
+                        {/* Dropdown panel */}
+                        {selectOpen && (
+                            <div style={{
+                                position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+                                zIndex: 9999, backgroundColor: optBg,
+                                border: `1.5px solid ${borderColor}`, borderRadius: dropRadius,
+                                boxShadow: dropShadow ? '0 8px 24px rgba(0,0,0,0.12)' : 'none',
+                                overflow: 'hidden',
+                            }}>
+                                {opts.map(opt => {
+                                    const isSel = opt.value === effectiveValue;
+                                    return (
+                                        <div
+                                            key={opt.value}
+                                            style={{
+                                                padding: '8px 12px', fontSize: fs, fontFamily: baseFont,
+                                                color: isSel ? optHoverText : optText,
+                                                backgroundColor: isSel ? optSelBg : optBg,
+                                                cursor: 'pointer',
+                                            }}
+                                            onMouseEnter={e => {
+                                                (e.currentTarget as HTMLDivElement).style.backgroundColor = optHoverBg;
+                                                (e.currentTarget as HTMLDivElement).style.color = optHoverText;
+                                            }}
+                                            onMouseLeave={e => {
+                                                (e.currentTarget as HTMLDivElement).style.backgroundColor = isSel ? optSelBg : optBg;
+                                                (e.currentTarget as HTMLDivElement).style.color = isSel ? optHoverText : optText;
+                                            }}
+                                            onMouseDown={(e) => {
+                                                e.stopPropagation();
+                                                setSelectValue(opt.value);
+                                                setSelectOpen(false);
+                                            }}
+                                        >
+                                            {opt.label}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        {renderHelper()}
+                    </div>
+                );
+            }
+
+            // ── Radio Button Group ─────────────────────────────────
+            if (ft === 'radio') {
+                const opts: { label: string; value: string }[] = fm.options || [];
+                const radioColor = fm.radioColor || '#136c6c';
+                const isRow = fm.direction === 'horizontal';
+                const activeRadio = isPreviewMode ? formRadioValue : (fm.defaultValue || '');
+                return (
+                    <div
+                        data-form-field="" data-form-stage={stageId}
+                        data-form-name={fm.name || ''} data-form-value={activeRadio}
+                        style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}
+                    >
+                        {renderLabel()}
+                        <div style={{ display: 'flex', flexDirection: isRow ? 'row' : 'column', gap: '8px', flexWrap: 'wrap' }}>
+                            {opts.map(opt => {
+                                const checked = activeRadio === opt.value;
+                                return (
+                                    <label
+                                        key={opt.value}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: isPreviewMode && !fm.disabled ? 'pointer' : 'default', userSelect: 'none' }}
+                                        onClick={isPreviewMode && !fm.disabled ? (e) => { e.stopPropagation(); setFormRadioValue(opt.value); } : undefined}
+                                    >
+                                        <div style={{
+                                            width: '16px', height: '16px', flexShrink: 0, borderRadius: '50%',
+                                            border: `2px solid ${checked ? radioColor : borderColor}`,
+                                            backgroundColor: bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            transition: 'border-color 0.15s',
+                                        }}>
+                                            {checked && <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: radioColor, transition: 'transform 0.1s' }} />}
+                                        </div>
+                                        <span style={{ fontSize: fs, color: textCol, fontFamily: baseFont, lineHeight: '1.4' }}>{opt.label}</span>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                        {renderHelper()}
+                    </div>
+                );
+            }
+
+            // ── Submit Button ──────────────────────────────────────
+            if (ft === 'form-button') {
+                const btnColor = fm.buttonColor || '#136c6c';
+                const btnTextColor = fm.textColor || '#ffffff';
+
+                const handleFormSubmit = (e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    if (!fm.endpoint) return;
+                    const fields = document.querySelectorAll(
+                        `[data-form-stage="${stageId}"][data-form-field]`
+                    ) as NodeListOf<HTMLElement>;
+                    const data: Record<string, string> = {};
+                    const submitFields: string[] | 'all' = fm.submitFields || 'all';
+                    fields.forEach(el => {
+                        const name = (el as HTMLElement).dataset.formName || '';
+                        if (!name) return;
+                        const value = (el as HTMLElement).dataset.formValue || '';
+                        if (submitFields === 'all' || (Array.isArray(submitFields) && submitFields.includes(name))) {
+                            data[name] = value;
+                        }
+                    });
+                    const method = (fm.method || 'POST').toUpperCase();
+                    const headers: Record<string, string> = {};
+                    let body: string | undefined;
+                    if (fm.submitFormat === 'xml') {
+                        const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                        const xmlBody = Object.entries(data).map(([k, v]) => `  <${k}>${esc(v)}</${k}>`).join('\n');
+                        body = `<?xml version="1.0" encoding="UTF-8"?>\n<form>\n${xmlBody}\n</form>`;
+                        headers['Content-Type'] = 'application/xml';
+                    } else {
+                        body = JSON.stringify(data);
+                        headers['Content-Type'] = 'application/json';
+                    }
+                    fetch(fm.endpoint, { method, headers, ...(method !== 'GET' ? { body } : {}) })
+                        .then(res => { if (res.ok && fm.successMessage) alert(fm.successMessage); else if (!res.ok && fm.errorMessage) alert(fm.errorMessage); })
+                        .catch(() => { if (fm.errorMessage) alert(fm.errorMessage); });
+                };
+
+                return (
+                    <button
+                        disabled={fm.disabled || !isPreviewMode}
+                        style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: fm.fullWidth !== false ? '100%' : 'auto',
+                            minHeight: '40px', padding: '0 24px',
+                            backgroundColor: btnColor, color: btnTextColor,
+                            border: 'none', borderRadius, cursor: isPreviewMode ? 'pointer' : 'default',
+                            fontSize: fs, fontFamily: baseFont, fontWeight: fm.fontWeight || '600',
+                            letterSpacing: '0.5px', outline: 'none', transition: 'opacity 0.15s',
+                        }}
+                        onClick={isPreviewMode ? handleFormSubmit : undefined}
+                    >
+                        {fm.label || 'Submit'}
+                    </button>
+                );
+            }
+
+            // ── Textarea ───────────────────────────────────────────
+            if (ft === 'textarea') {
+                return (
+                    <div
+                        data-form-field="" data-form-stage={stageId}
+                        data-form-name={fm.name || ''} data-form-value={isPreviewMode ? formTextValue : (fm.defaultValue || '')}
+                        style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', height: '100%' }}
+                    >
+                        {renderLabel()}
+                        <textarea
+                            placeholder={fm.placeholder || 'Write your message...'}
+                            value={isPreviewMode ? formTextValue : (fm.defaultValue || '')}
+                            disabled={fm.disabled || !isPreviewMode}
+                            readOnly={!isPreviewMode}
+                            style={{
+                                flex: 1, border: `1.5px solid ${borderColor}`, borderRadius, backgroundColor: bg,
+                                color: textCol, fontSize: fs, fontFamily: baseFont,
+                                padding: '8px 10px', resize: isPreviewMode ? (fm.resize || 'vertical') : 'none',
+                                outline: 'none', lineHeight: '1.5', transition: 'border-color 0.15s',
+                            }}
+                            onChange={isPreviewMode ? (e => setFormTextValue(e.target.value)) : undefined}
+                            onClick={(e) => { if (isPreviewMode) e.stopPropagation(); }}
+                        />
+                        {renderHelper()}
+                    </div>
+                );
+            }
+
+            // ── Number Input ───────────────────────────────────────
+            if (ft === 'number-input') {
+                return (
+                    <div
+                        data-form-field="" data-form-stage={stageId}
+                        data-form-name={fm.name || ''} data-form-value={isPreviewMode ? formTextValue : (fm.defaultValue || '')}
+                        style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}
+                    >
+                        {renderLabel()}
+                        <div style={inputBoxStyle}>
+                            {prefixEl}
+                            <input
+                                type="number"
+                                placeholder={fm.placeholder ?? '0'}
+                                value={isPreviewMode ? formTextValue : (fm.defaultValue || '')}
+                                min={fm.min !== '' ? fm.min : undefined}
+                                max={fm.max !== '' ? fm.max : undefined}
+                                step={fm.step || '1'}
+                                disabled={fm.disabled || !isPreviewMode}
+                                readOnly={!isPreviewMode}
+                                style={{ ...sharedInputStyle, MozAppearance: 'textfield' } as React.CSSProperties}
+                                onChange={isPreviewMode ? (e => setFormTextValue(e.target.value)) : undefined}
+                                onClick={(e) => { if (isPreviewMode) e.stopPropagation(); }}
+                            />
+                            {suffixEl}
+                            {fm.showSteppers !== false && (
+                                <div style={{ display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${borderColor}`, alignSelf: 'stretch' }}>
+                                    <button style={{ flex: 1, padding: '0 7px', fontSize: '9px', color: '#6b7280', background: 'none', border: 'none', cursor: isPreviewMode ? 'pointer' : 'default', borderBottom: `1px solid ${borderColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }} tabIndex={-1}>▲</button>
+                                    <button style={{ flex: 1, padding: '0 7px', fontSize: '9px', color: '#6b7280', background: 'none', border: 'none', cursor: isPreviewMode ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center' }} tabIndex={-1}>▼</button>
+                                </div>
+                            )}
+                        </div>
+                        {renderHelper()}
+                    </div>
+                );
+            }
+
+            // ── Text Input / Email Input (default) ─────────────────
+            const inputType = ft === 'email-input' ? 'email' : 'text';
+            const showEmailIcon = ft === 'email-input' && fm.showIcon !== false;
+            return (
+                <div
+                    data-form-field="" data-form-stage={stageId}
+                    data-form-name={fm.name || ''} data-form-value={isPreviewMode ? formTextValue : (fm.defaultValue || '')}
+                    style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}
+                >
+                    {renderLabel()}
+                    <div style={inputBoxStyle}>
+                        {showEmailIcon && !fm.prefix && (
+                            <span style={{ padding: '0 0 0 10px', color: '#9ca3af', fontSize: '14px', display: 'flex', alignItems: 'center', fontFamily: 'Material Symbols Outlined', userSelect: 'none' }}>
+                                @
+                            </span>
+                        )}
+                        {prefixEl}
+                        <input
+                            type={inputType}
+                            placeholder={fm.placeholder || ''}
+                            value={isPreviewMode ? formTextValue : (fm.defaultValue || '')}
+                            maxLength={fm.maxLength ? parseInt(fm.maxLength) : undefined}
+                            disabled={fm.disabled || !isPreviewMode}
+                            readOnly={!isPreviewMode}
+                            style={sharedInputStyle}
+                            onChange={isPreviewMode ? (e => setFormTextValue(e.target.value)) : undefined}
+                            onClick={(e) => { if (isPreviewMode) e.stopPropagation(); }}
+                        />
+                        {suffixEl}
+                    </div>
+                    {renderHelper()}
+                </div>
+            );
+        };
+
+        // Checkbox doesn't need the outer label/column wrapper (it's self-contained)
+        const isCheckbox = ft === 'checkbox';
+
+        return (
+            <div style={wrapperStyle}>
+                {renderRawStyle()}
+                <div
+                    id={layer.id}
+                    className={`${isChildOfAutoLayout ? 'relative' : 'absolute'} select-none ${isSelected ? 'z-[300]' : ''}`}
+                    style={{ ...containerStyle, display: 'flex', flexDirection: 'column', justifyContent: isCheckbox ? 'center' : 'flex-start', gap: isCheckbox ? 0 : '4px', cursor: cursor || 'pointer' }}
+                    tabIndex={layer.interactionActions?.some(a => a.event === 'focus' || a.event === 'blur') ? 0 : undefined}
+                    {...wrapHandlers}
+                >
+                    {renderInputContent()}
                 </div>
             </div>
         );

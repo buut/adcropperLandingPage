@@ -98,7 +98,17 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 <span className={`text-[9px] ${activeTab === 'button' ? 'font-semibold' : 'font-medium'}`}>Button</span>
                 {activeTab === 'button' && <div className="absolute -left-4 w-1 h-8 bg-primary rounded-r-full top-1"></div>}
             </button>
-            <button 
+            <button
+                className={`flex flex-col items-center gap-1 group transition-colors relative ${activeTab === 'form' ? 'text-primary' : 'text-gray-500 hover:text-gray-800'}`}
+                onClick={() => onTabClick?.('form')}
+            >
+                <div className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${activeTab === 'form' ? 'bg-primary/10' : 'hover:bg-gray-100'}`}>
+                    <span className="material-symbols-outlined text-[24px]">pin</span>
+                </div>
+                <span className={`text-[9px] ${activeTab === 'form' ? 'font-semibold' : 'font-medium'}`}>Form</span>
+                {activeTab === 'form' && <div className="absolute -left-4 w-1 h-8 bg-primary rounded-r-full top-1"></div>}
+            </button>
+            <button
                 className={`flex flex-col items-center gap-1 group transition-colors relative ${activeTab === 'widget' ? 'text-primary' : 'text-gray-500 hover:text-gray-800'}`}
                 onClick={() => onTabClick?.('widget')}
             >
