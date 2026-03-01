@@ -2626,6 +2626,7 @@ const Workspace = React.forwardRef<WorkspaceHandle, WorkspaceProps>(({
                                                 stageActions={stage.actions}
                                                 actionStates={actionStates}
                                                 onTriggerAction={onTriggerAction}
+                                                onLandingPageAction={onLandingPageAction}
                                                 stageWidth={stage.width}
                                                 stageHeight={stage.height}
                                                  fonts={fonts}

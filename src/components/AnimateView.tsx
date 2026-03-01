@@ -26,6 +26,7 @@ interface AnimateViewProps {
     onTriggerAction?: (actionId: string, isActive: boolean) => void;
     editingLayerIds?: Record<string, string | null>;
     fonts?: FontData[];
+    isInteractive?: boolean;
 }
 
 const StagePreviewWrapper: React.FC<{ 
@@ -134,19 +135,24 @@ const StagePreviewWrapper: React.FC<{
                     })()}
                     onClick={(e) => {
                         if (!isInteractive) return;
+                        console.log(`[StagePreviewWrapper] Stage clicked for stage ${stage.id}`);
                         stage.actions?.forEach(a => {
                             if (a.triggerSourceId === 'stage' && (a.triggerEvent === 'click' || !a.triggerEvent)) {
+                                console.log(`[StagePreviewWrapper] Triggering stage action ${a.id} (type: ${a.actionType}, phase: ${a.config?.animationPhase})`);
                                 onTriggerAction?.(a.id, !actionStates[a.id]);
                             }
                         });
                     }}
                     onMouseEnter={() => {
                         if (!isInteractive) return;
+                        console.log(`[StagePreviewWrapper] mouseEnter for stage ${stage.id}`);
                         stage.actions?.forEach(a => {
                             if (a.triggerSourceId === 'stage') {
                                 if (a.triggerEvent === 'hover') {
+                                    console.log(`[StagePreviewWrapper] Triggering HOVER ON stage action ${a.id}`);
                                     onTriggerAction?.(a.id, true);
                                 } else if (a.triggerEvent === 'hoverEnd') {
+                                    console.log(`[StagePreviewWrapper] Triggering HOVER OFF (hoverEnd action) stage action ${a.id}`);
                                     onTriggerAction?.(a.id, false);
                                 }
                             }
@@ -154,11 +160,14 @@ const StagePreviewWrapper: React.FC<{
                     }}
                     onMouseLeave={() => {
                         if (!isInteractive) return;
+                        console.log(`[StagePreviewWrapper] mouseLeave for stage ${stage.id}`);
                         stage.actions?.forEach(a => {
                             if (a.triggerSourceId === 'stage') {
                                 if (a.triggerEvent === 'hover') {
+                                    console.log(`[StagePreviewWrapper] Triggering HOVER OFF stage action ${a.id}`);
                                     onTriggerAction?.(a.id, false);
                                 } else if (a.triggerEvent === 'hoverEnd') {
+                                    console.log(`[StagePreviewWrapper] Triggering HOVER ON (hoverEnd action) stage action ${a.id}`);
                                     onTriggerAction?.(a.id, true);
                                 }
                             }
@@ -229,7 +238,8 @@ const AnimateView: React.FC<Omit<AnimateViewProps, 'onZoomChange'>> = (props) =>
         actionStates = {},
         onTriggerAction,
         editingLayerIds = {},
-        fonts = []
+        fonts = [],
+        isInteractive = false
     } = props;
 
     // Ref to the main container for non-passive zoom prevention

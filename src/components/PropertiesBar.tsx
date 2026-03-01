@@ -690,7 +690,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
     const [widgetCode, setWidgetCode] = useState<{ html: string; css: string; js: string; name: string; icon: string; properties: any[] }>({ 
         html: '', css: '', js: '', name: '', icon: 'widgets', properties: [] 
     });
-    const [openDropdown, setOpenDropdown] = useState<{ actionId: string, type: 'source' | 'target' | 'effect' } | null>(null);
+    const [openDropdown, setOpenDropdown] = useState<{ actionId: string, type: 'source' | 'target' | 'effect' | 'ia-event' | 'ia-action' | 'ia-target' } | null>(null);
     const [dropdownSearchTerm, setDropdownSearchTerm] = useState('');
     const lastFocusedId = useRef<string | null>(null);
     const spatialDebounceTimers = useRef<Record<string, any>>({});
@@ -1974,6 +1974,25 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                     </div>
 
                                     {renderInput('Stage Duration', 'stageDuration', 'schedule')}
+                                    
+                                    {/* Auto-Play toggle for Stage */}
+                                    <div className="flex items-center justify-between border border-gray-100 rounded-xl px-4 py-3 bg-gray-50/50">
+                                        <div className="flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[16px] text-primary">play_circle</span>
+                                            <span className="text-[10px] font-bold text-gray-700 uppercase tracking-widest">Auto Play</span>
+                                        </div>
+                                        {(() => {
+                                            const isStageAutoPlay = currentStage.autoPlay === undefined || currentStage.autoPlay === true;
+                                            return (
+                                                <button
+                                                    className={`relative w-9 h-5 rounded-full transition-colors ${isStageAutoPlay ? 'bg-primary' : 'bg-gray-200'}`}
+                                                    onClick={() => onUpdateStage(currentStage.id, { autoPlay: !isStageAutoPlay })}
+                                                >
+                                                    <div className={`absolute top-0.5 left-0.5 size-4 bg-white rounded-full shadow transition-transform ${isStageAutoPlay ? 'translate-x-4' : ''}`} />
+                                                </button>
+                                            );
+                                        })()}
+                                    </div>
 
                                     <div className="h-px bg-gray-50 my-1"></div>
 
@@ -2138,7 +2157,12 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                             </div>
                                                             <div className="relative group/src-select">
                                                                 <div 
-                                                                    onClick={() => setOpenDropdown(openDropdown?.actionId === action.id && openDropdown?.type === 'source' ? null : { actionId: action.id, type: 'source' })}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setOpenDropdown(openDropdown?.actionId === action.id && openDropdown?.type === 'source' ? null : { actionId: action.id, type: 'source' });
+                                                                        setDropdownSearchTerm('');
+                                                                    }}
+                                                                    onMouseDown={(e) => e.stopPropagation()}
                                                                     className={`flex items-center justify-between p-2 bg-gray-50/50 border rounded-lg hover:border-primary/30 transition-all cursor-pointer ${openDropdown?.actionId === action.id && openDropdown?.type === 'source' ? 'border-primary ring-2 ring-primary/10' : 'border-gray-100'}`}
                                                                 >
                                                                     <div className="flex items-center gap-2 min-w-0">
@@ -2161,7 +2185,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                 
                                                                 {/* Dropdown Menu */}
                                                                 {openDropdown?.actionId === action.id && openDropdown?.type === 'source' && (
-                                                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-md overflow-hidden">
+                                                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-md overflow-hidden" onMouseDown={(e) => e.stopPropagation()}>
                                                                         <div className="p-1 px-2 border-b border-gray-50 bg-gray-50/30">
                                                                             <div className="relative">
                                                                                 <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-[14px]">search</span>
@@ -2171,6 +2195,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                                     placeholder="Search layers..."
                                                                                     value={dropdownSearchTerm}
                                                                                     onChange={(e) => setDropdownSearchTerm(e.target.value)}
+                                                                                    onMouseDown={(e) => e.stopPropagation()}
                                                                                     className="w-full h-7 pl-7 pr-2 bg-white border border-gray-100 rounded-md text-[9px] font-bold outline-none focus:border-primary transition-all placeholder:text-gray-300"
                                                                                 />
                                                                             </div>
@@ -2178,7 +2203,8 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                         <div className="max-h-[180px] overflow-y-auto custom-scrollbar">
                                                                             {('STAGE (GLOBAL)'.toLowerCase().includes(dropdownSearchTerm.toLowerCase())) && (
                                                                                 <button
-                                                                                    onClick={() => {
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
                                                                                         const sc = stages.find(s => s.id === selectedStageId);
                                                                                         if (!sc) return;
                                                                                         const newActions = [...(sc.actions || [])];
@@ -2203,7 +2229,8 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                                 .map(l => (
                                                                                 <button
                                                                                     key={l.id}
-                                                                                    onClick={() => {
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
                                                                                         const sc = stages.find(s => s.id === selectedStageId);
                                                                                         if (!sc) return;
                                                                                         const newActions = [...(sc.actions || [])];
@@ -2272,7 +2299,12 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                             </div>
                                                             <div className="relative group/target-select">
                                                                 <div 
-                                                                    onClick={() => setOpenDropdown(openDropdown?.actionId === action.id && openDropdown?.type === 'target' ? null : { actionId: action.id, type: 'target' })}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setOpenDropdown(openDropdown?.actionId === action.id && openDropdown?.type === 'target' ? null : { actionId: action.id, type: 'target' });
+                                                                        setDropdownSearchTerm('');
+                                                                    }}
+                                                                    onMouseDown={(e) => e.stopPropagation()}
                                                                     className={`flex items-center justify-between p-2 bg-gray-50/50 border rounded-lg hover:border-primary/30 transition-all cursor-pointer ${openDropdown?.actionId === action.id && openDropdown?.type === 'target' ? 'border-primary ring-2 ring-primary/10' : 'border-gray-100'}`}
                                                                 >
                                                                     <div className="flex items-center gap-2 min-w-0">
@@ -2295,7 +2327,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                 
                                                                 {/* Dropdown Menu */}
                                                                 {openDropdown?.actionId === action.id && openDropdown?.type === 'target' && (
-                                                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-md overflow-hidden">
+                                                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-md overflow-hidden" onMouseDown={(e) => e.stopPropagation()}>
                                                                         <div className="p-1 px-2 border-b border-gray-50 bg-gray-50/30">
                                                                             <div className="relative">
                                                                                 <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-[14px]">search</span>
@@ -2305,60 +2337,63 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                                     placeholder="Search layers..."
                                                                                     value={dropdownSearchTerm}
                                                                                     onChange={(e) => setDropdownSearchTerm(e.target.value)}
+                                                                                    onMouseDown={(e) => e.stopPropagation()}
                                                                                     className="w-full h-7 pl-7 pr-2 bg-white border border-gray-100 rounded-md text-[9px] font-bold outline-none focus:border-primary transition-all placeholder:text-gray-300"
                                                                                 />
                                                                             </div>
                                                                         </div>
                                                                          <div className="max-h-[180px] overflow-y-auto custom-scrollbar">
-                                                                             {/* Stages as targets (for scroll-to-section) */}
-                                                                             {stages.filter(s => s.id !== selectedStageId && (!dropdownSearchTerm || s.name.toLowerCase().includes(dropdownSearchTerm.toLowerCase()))).map(s => (
+                                                                              {/* Stages as targets (for scroll-to-section) */}
+                                                                              {stages.filter(s => s.id !== selectedStageId && (!dropdownSearchTerm || s.name.toLowerCase().includes(dropdownSearchTerm.toLowerCase()))).map(s => (
+                                                                                  <button
+                                                                                      key={s.id}
+                                                                                      onClick={(e) => {
+                                                                                          e.stopPropagation();
+                                                                                          const sc = stages.find(st => st.id === selectedStageId);
+                                                                                          if (!sc) return;
+                                                                                          const newActions = [...(sc.actions || [])];
+                                                                                          newActions[idx] = { ...action, targetId: s.id };
+                                                                                          onUpdateStage(sc.id, { actions: newActions as LandingPageAction[] });
+                                                                                          setOpenDropdown(null);
+                                                                                      }}
+                                                                                      className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 transition-all hover:bg-primary/5 group/opt ${action.targetId === s.id ? 'bg-primary/[0.03]' : ''}`}
+                                                                                  >
+                                                                                      <div className={`size-6 rounded-md flex items-center justify-center shrink-0 transition-all ${action.targetId === s.id ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400 group-hover/opt:bg-white group-hover/opt:text-primary'}`}>
+                                                                                          <span className="material-symbols-outlined text-[14px]">web_asset</span>
+                                                                                      </div>
+                                                                                      <div className="flex flex-col items-start min-w-0">
+                                                                                          <span className={`text-[9px] font-black tracking-tight truncate w-full text-left ${action.targetId === s.id ? 'text-primary' : 'text-gray-700'}`}>{s.name}</span>
+                                                                                          <span className="text-[7px] text-gray-400 font-bold tracking-tight uppercase">Section</span>
+                                                                                      </div>
+                                                                                  </button>
+                                                                              ))}
+
+                                                                              {/* Layers as targets */}
+                                                                              {allLayers
+                                                                                 .filter(l => l.name.toLowerCase().includes(dropdownSearchTerm.toLowerCase()) || l.type.toLowerCase().includes(dropdownSearchTerm.toLowerCase()))
+                                                                                 .map(l => (
                                                                                  <button
-                                                                                     key={s.id}
-                                                                                     onClick={() => {
-                                                                                         const sc = stages.find(st => st.id === selectedStageId);
+                                                                                     key={l.id}
+                                                                                     onClick={(e) => {
+                                                                                         e.stopPropagation();
+                                                                                         const sc = stages.find(s => s.id === selectedStageId);
                                                                                          if (!sc) return;
                                                                                          const newActions = [...(sc.actions || [])];
-                                                                                         newActions[idx] = { ...action, targetId: s.id };
+                                                                                         newActions[idx] = { ...action, targetId: l.id };
                                                                                          onUpdateStage(sc.id, { actions: newActions as LandingPageAction[] });
                                                                                          setOpenDropdown(null);
                                                                                      }}
-                                                                                     className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 transition-all hover:bg-primary/5 group/opt ${action.targetId === s.id ? 'bg-primary/[0.03]' : ''}`}
+                                                                                     className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 transition-all hover:bg-primary/5 group/opt ${action.targetId === l.id ? 'bg-primary/[0.03]' : ''}`}
                                                                                  >
-                                                                                     <div className={`size-6 rounded-md flex items-center justify-center shrink-0 transition-all ${action.targetId === s.id ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400 group-hover/opt:bg-white group-hover/opt:text-primary'}`}>
-                                                                                         <span className="material-symbols-outlined text-[14px]">web_asset</span>
+                                                                                     <div className={`size-6 rounded-md flex items-center justify-center shrink-0 transition-all ${action.targetId === l.id ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400 group-hover/opt:bg-white group-hover/opt:text-primary'}`}>
+                                                                                         <span className="material-symbols-outlined text-[14px]">{getLayerIcon(l.type)}</span>
                                                                                      </div>
                                                                                      <div className="flex flex-col items-start min-w-0">
-                                                                                         <span className={`text-[9px] font-black tracking-tight truncate w-full text-left ${action.targetId === s.id ? 'text-primary' : 'text-gray-700'}`}>{s.name}</span>
-                                                                                         <span className="text-[7px] text-gray-400 font-bold tracking-tight uppercase">Section</span>
+                                                                                         <span className={`text-[9px] font-black tracking-tight truncate w-full text-left ${action.targetId === l.id ? 'text-primary' : 'text-gray-700'}`}>{l.name}</span>
+                                                                                         <span className="text-[7px] text-gray-400 font-bold tracking-tight uppercase">{l.type} Layer</span>
                                                                                      </div>
                                                                                  </button>
                                                                              ))}
-
-                                                                             {/* Layers as targets */}
-                                                                             {allLayers
-                                                                                .filter(l => l.name.toLowerCase().includes(dropdownSearchTerm.toLowerCase()) || l.type.toLowerCase().includes(dropdownSearchTerm.toLowerCase()))
-                                                                                .map(l => (
-                                                                                <button
-                                                                                    key={l.id}
-                                                                                    onClick={() => {
-                                                                                        const sc = stages.find(s => s.id === selectedStageId);
-                                                                                        if (!sc) return;
-                                                                                        const newActions = [...(sc.actions || [])];
-                                                                                        newActions[idx] = { ...action, targetId: l.id };
-                                                                                        onUpdateStage(sc.id, { actions: newActions as LandingPageAction[] });
-                                                                                        setOpenDropdown(null);
-                                                                                    }}
-                                                                                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 transition-all hover:bg-primary/5 group/opt ${action.targetId === l.id ? 'bg-primary/[0.03]' : ''}`}
-                                                                                >
-                                                                                    <div className={`size-6 rounded-md flex items-center justify-center shrink-0 transition-all ${action.targetId === l.id ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400 group-hover/opt:bg-white group-hover/opt:text-primary'}`}>
-                                                                                        <span className="material-symbols-outlined text-[14px]">{getLayerIcon(l.type)}</span>
-                                                                                    </div>
-                                                                                    <div className="flex flex-col items-start min-w-0">
-                                                                                        <span className={`text-[9px] font-black tracking-tight truncate w-full text-left ${action.targetId === l.id ? 'text-primary' : 'text-gray-700'}`}>{l.name}</span>
-                                                                                        <span className="text-[7px] text-gray-400 font-bold tracking-tight uppercase">{l.type} Layer</span>
-                                                                                    </div>
-                                                                                </button>
-                                                                            ))}
                                                                         </div>
                                                                     </div>
                                                                 )}
@@ -2386,6 +2421,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                     <div className="relative group/efx-select">
                                                                         <div
                                                                             onClick={() => setOpenDropdown(openDropdown?.actionId === action.id && openDropdown?.type === 'effect' ? null : { actionId: action.id, type: 'effect' })}
+                                                                            onMouseDown={(e) => e.stopPropagation()}
                                                                             className={`flex items-center justify-between p-2 bg-primary/[0.03] border rounded-lg hover:border-primary/30 transition-all cursor-pointer ${openDropdown?.actionId === action.id && openDropdown?.type === 'effect' ? 'border-primary ring-2 ring-primary/10' : 'border-primary/10'}`}
                                                                         >
                                                                             <div className="flex items-center gap-2">
@@ -2400,7 +2436,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                             <span className={`material-symbols-outlined text-gray-300 text-[14px] transition-all ${openDropdown?.actionId === action.id && openDropdown?.type === 'effect' ? 'rotate-180 text-primary' : ''}`}>keyboard_arrow_down</span>
                                                                         </div>
                                                                         {openDropdown?.actionId === action.id && openDropdown?.type === 'effect' && (
-                                                                            <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-md overflow-hidden">
+                                                                            <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-md overflow-hidden" onMouseDown={(e) => e.stopPropagation()}>
                                                                                 <div className="flex flex-col max-h-[220px] overflow-y-auto custom-scrollbar">
                                                                                     {LP_ACTION_OPTIONS.map(opt => (
                                                                                         <button
@@ -2765,12 +2801,17 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                 {/* Auto-Play toggle */}
                                 <div className="flex items-center justify-between">
                                     <span className="text-[10px] font-bold text-gray-700">Auto-Play</span>
-                                    <button
-                                        className={`relative w-9 h-5 rounded-full transition-colors ${fl.animationAutoPlay ? 'bg-primary' : 'bg-gray-200'}`}
-                                        onClick={() => onUpdateLayers(selectedLayerIds, { animationAutoPlay: !fl.animationAutoPlay })}
-                                    >
-                                        <div className={`absolute top-0.5 left-0.5 size-4 bg-white rounded-full shadow transition-transform ${fl.animationAutoPlay ? 'translate-x-4' : ''}`} />
-                                    </button>
+                                    {(() => {
+                                        const isAutoPlay = fl.animationAutoPlay === undefined || fl.animationAutoPlay === true;
+                                        return (
+                                            <button
+                                                className={`relative w-9 h-5 rounded-full transition-colors ${isAutoPlay ? 'bg-primary' : 'bg-gray-200'}`}
+                                                onClick={() => onUpdateLayers(selectedLayerIds, { animationAutoPlay: !isAutoPlay })}
+                                            >
+                                                <div className={`absolute top-0.5 left-0.5 size-4 bg-white rounded-full shadow transition-transform ${isAutoPlay ? 'translate-x-4' : ''}`} />
+                                            </button>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Loop Count */}
@@ -2810,13 +2851,37 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                 {selectedLayers.length > 0 && (() => {
                     const fl = selectedLayers[0];
                     const actions: InteractionAction[] = fl.interactionActions || [];
+                    const stageForIA = stages.find(s => s.id === selectedStageId);
+                    const allLayersForIA = stageForIA ? getAllLayers(stageForIA.layers).filter(l => l.id !== fl.id) : [];
 
                     const updateActions = (updated: InteractionAction[]) => {
                         onUpdateLayers(selectedLayerIds, { interactionActions: updated });
                     };
 
+                    const IA_EVENT_OPTIONS: { id: AnimationTriggerEvent; label: string; icon: string }[] = [
+                        { id: 'click',            label: 'Click / Tap',       icon: 'touch_app' },
+                        { id: 'hover',            label: 'Mouse Over',         icon: 'ads_click' },
+                        { id: 'hoverEnd',         label: 'Mouse Out',          icon: 'eject' },
+                        { id: 'touchStart',       label: 'Touch Start',        icon: 'swipe' },
+                        { id: 'touchEnd',         label: 'Touch End',          icon: 'swipe_left' },
+                        { id: 'focus',            label: 'Focus',              icon: 'center_focus_weak' },
+                        { id: 'blur',             label: 'Blur',               icon: 'blur_on' },
+                        { id: 'scroll-into-view', label: 'Scroll Into View',   icon: 'visibility' },
+                    ];
+
+                    const IA_ACTION_OPTIONS: { id: AnimationTriggerAction; label: string; icon: string; desc: string }[] = [
+                        { id: 'play-entry', label: 'Play Entry',  icon: 'play_arrow',          desc: 'Play entry animation' },
+                        { id: 'play-main',  label: 'Play Loop',   icon: 'loop',                desc: 'Play looping animation' },
+                        { id: 'play-exit',  label: 'Play Exit',   icon: 'skip_next',           desc: 'Play exit animation' },
+                        { id: 'play-all',   label: 'Play Full',   icon: 'play_circle',         desc: 'Play all phases' },
+                        { id: 'stop',       label: 'Stop',        icon: 'stop_circle',         desc: 'Stop animation' },
+                        { id: 'pause',      label: 'Pause',       icon: 'pause_circle',        desc: 'Pause animation' },
+                        { id: 'resume',     label: 'Resume',      icon: 'play_circle_outline', desc: 'Resume from pause' },
+                        { id: 'reset',      label: 'Reset',       icon: 'restart_alt',         desc: 'Reset to first frame' },
+                    ];
+
                     return (
-                        <div className="flex flex-col gap-3 p-4 bg-gray-50/50 border border-gray-100 rounded-2xl mb-2 hover:border-primary/20 transition-all">
+                        <div className="flex flex-col gap-3 p-4 bg-gray-50/50 border border-gray-100 rounded-2xl mb-2 hover:border-primary/20 transition-all action-selector-container">
                             <div className="flex items-center justify-between">
                                 <label className="text-[10px] text-gray-900 font-black uppercase tracking-widest flex items-center gap-2">
                                     <span className="material-symbols-outlined text-[16px] text-primary">touch_app</span>
@@ -2839,45 +2904,195 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
 
                             {actions.length === 0 ? (
                                 <p className="text-[9px] text-gray-400 text-center py-2">No interactions. Click + to add one.</p>
-                            ) : actions.map((ia, idx) => (
-                                <div key={ia.id} className="flex items-center gap-1.5 p-2 bg-white border border-gray-100 rounded-xl">
-                                    <select
-                                        value={ia.event}
-                                        onChange={e => updateActions(actions.map((x, i) => i === idx ? { ...x, event: e.target.value as AnimationTriggerEvent } : x))}
-                                        className="flex-1 text-[9px] border border-gray-200 rounded-lg px-1.5 py-1 focus:border-primary/50 outline-none bg-white"
-                                    >
-                                        <option value="click">Click / Tap</option>
-                                        <option value="hover">Mouse Over</option>
-                                        <option value="hoverEnd">Mouse Out</option>
-                                        <option value="touchStart">Touch Start</option>
-                                        <option value="touchEnd">Touch End</option>
-                                        <option value="focus">Focus</option>
-                                        <option value="blur">Blur</option>
-                                        <option value="scroll-into-view">Scroll Into View</option>
-                                    </select>
-                                    <span className="text-[9px] text-gray-300 shrink-0">→</span>
-                                    <select
-                                        value={ia.action}
-                                        onChange={e => updateActions(actions.map((x, i) => i === idx ? { ...x, action: e.target.value as AnimationTriggerAction } : x))}
-                                        className="flex-1 text-[9px] border border-gray-200 rounded-lg px-1.5 py-1 focus:border-primary/50 outline-none bg-white"
-                                    >
-                                        <option value="play-entry">Play Entry</option>
-                                        <option value="play-main">Play Loop</option>
-                                        <option value="play-exit">Play Exit</option>
-                                        <option value="play-all">Play Full</option>
-                                        <option value="stop">Stop</option>
-                                        <option value="pause">Pause</option>
-                                        <option value="resume">Resume</option>
-                                        <option value="reset">Reset</option>
-                                    </select>
-                                    <button
-                                        onClick={() => updateActions(actions.filter((_, i) => i !== idx))}
-                                        className="size-6 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors flex items-center justify-center shrink-0"
-                                    >
-                                        <span className="material-symbols-outlined text-[14px]">close</span>
-                                    </button>
-                                </div>
-                            ))}
+                            ) : actions.map((ia, idx) => {
+                                const currentEvent = IA_EVENT_OPTIONS.find(o => o.id === ia.event);
+                                const currentAction = IA_ACTION_OPTIONS.find(o => o.id === ia.action);
+                                const targetLayer = ia.targetLayerId ? allLayersForIA.find(l => l.id === ia.targetLayerId) : null;
+                                const iaKey = ia.id;
+                                return (
+                                    <div key={ia.id} className="flex flex-col gap-2 p-3 bg-white border border-gray-100 rounded-xl">
+                                        {/* Header: label + delete */}
+                                        <div className="flex items-center justify-between mb-0.5">
+                                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Interaction {idx + 1}</span>
+                                            <button
+                                                onClick={() => updateActions(actions.filter((_, i) => i !== idx))}
+                                                className="size-5 rounded-md hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors flex items-center justify-center"
+                                            >
+                                                <span className="material-symbols-outlined text-[13px]">close</span>
+                                            </button>
+                                        </div>
+
+                                        {/* Trigger event */}
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Trigger</span>
+                                            <div className="relative">
+                                                <div
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setOpenDropdown(openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-event' ? null : { actionId: iaKey, type: 'ia-event' });
+                                                    }}
+                                                    className={`flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border rounded-lg hover:border-primary/30 transition-all cursor-pointer ${openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-event' ? 'border-primary ring-2 ring-primary/10' : 'border-gray-100'}`}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="material-symbols-outlined text-[13px] text-primary">{currentEvent?.icon || 'touch_app'}</span>
+                                                        <span className="text-[9px] font-black text-gray-700 uppercase tracking-tight">{currentEvent?.label || 'Select Trigger'}</span>
+                                                    </div>
+                                                    <span className={`material-symbols-outlined text-[13px] text-gray-300 transition-all ${openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-event' ? 'rotate-180 text-primary' : ''}`}>keyboard_arrow_down</span>
+                                                </div>
+                                                {openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-event' && (
+                                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
+                                                        {IA_EVENT_OPTIONS.map(opt => (
+                                                            <button
+                                                                key={opt.id}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    updateActions(actions.map((x, i) => i === idx ? { ...x, event: opt.id } : x));
+                                                                    setOpenDropdown(null);
+                                                                }}
+                                                                className={`w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-primary/[0.04] transition-colors text-left ${ia.event === opt.id ? 'bg-primary/[0.08]' : ''}`}
+                                                            >
+                                                                <span className={`material-symbols-outlined text-[14px] ${ia.event === opt.id ? 'text-primary' : 'text-gray-400'}`}>{opt.icon}</span>
+                                                                <span className={`text-[9px] font-black uppercase tracking-tight ${ia.event === opt.id ? 'text-primary' : 'text-gray-700'}`}>{opt.label}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Target layer */}
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Target Layer</span>
+                                            <div className="relative">
+                                                <div
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDropdownSearchTerm('');
+                                                        setOpenDropdown(openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-target' ? null : { actionId: iaKey, type: 'ia-target' });
+                                                    }}
+                                                    className={`flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border rounded-lg hover:border-primary/30 transition-all cursor-pointer ${openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-target' ? 'border-primary ring-2 ring-primary/10' : 'border-gray-100'}`}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`size-5 rounded-md flex items-center justify-center shrink-0 ${targetLayer ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-400'}`}>
+                                                            <span className="material-symbols-outlined text-[12px]">{targetLayer ? getLayerIcon(targetLayer.type) : 'my_location'}</span>
+                                                        </div>
+                                                        <span className={`text-[9px] font-black uppercase tracking-tight truncate ${targetLayer ? 'text-gray-800' : 'text-gray-400'}`}>
+                                                            {targetLayer ? targetLayer.name : 'Self (this layer)'}
+                                                        </span>
+                                                    </div>
+                                                    <span className={`material-symbols-outlined text-[13px] text-gray-300 transition-all shrink-0 ${openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-target' ? 'rotate-180 text-primary' : ''}`}>keyboard_arrow_down</span>
+                                                </div>
+                                                {openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-target' && (
+                                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden max-h-[300px] flex flex-col">
+                                                        <div className="p-2 border-b border-gray-50 flex items-center gap-2 sticky top-0 bg-white/80 backdrop-blur-sm z-10" onMouseDown={(e) => e.stopPropagation()}>
+                                                            <span className="material-symbols-outlined text-[16px] text-gray-400">search</span>
+                                                            <input
+                                                                type="text"
+                                                                autoFocus
+                                                                value={dropdownSearchTerm}
+                                                                onChange={(e) => setDropdownSearchTerm(e.target.value)}
+                                                                placeholder="Search layer..."
+                                                                className="w-full text-[10px] bg-transparent outline-none font-bold text-gray-700 uppercase"
+                                                            />
+                                                        </div>
+                                                        <div className="overflow-y-auto custom-scrollbar flex-1 p-1" onMouseDown={(e) => e.stopPropagation()}>
+                                                            {/* Self option */}
+                                                            {(!dropdownSearchTerm || 'self'.includes(dropdownSearchTerm.toLowerCase()) || 'this layer'.includes(dropdownSearchTerm.toLowerCase())) && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        updateActions(actions.map((x, i) => i === idx ? { ...x, targetLayerId: undefined } : x));
+                                                                        setOpenDropdown(null);
+                                                                    }}
+                                                                    className={`w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-primary/[0.04] transition-colors text-left rounded-lg ${!ia.targetLayerId ? 'bg-primary/[0.08]' : ''}`}
+                                                                >
+                                                                    <div className={`size-5 rounded-md flex items-center justify-center shrink-0 ${!ia.targetLayerId ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400'}`}>
+                                                                        <span className="material-symbols-outlined text-[12px]">my_location</span>
+                                                                    </div>
+                                                                    <div className="flex flex-col items-start min-w-0">
+                                                                        <span className={`text-[9px] font-black tracking-tight ${!ia.targetLayerId ? 'text-primary' : 'text-gray-700'}`}>Self</span>
+                                                                        <span className="text-[7px] text-gray-400 font-bold uppercase tracking-widest">This layer</span>
+                                                                    </div>
+                                                                </button>
+                                                            )}
+                                                            {allLayersForIA.filter(l => !dropdownSearchTerm || l.name?.toLowerCase().includes(dropdownSearchTerm.toLowerCase()) || l.type?.toLowerCase().includes(dropdownSearchTerm.toLowerCase())).map(l => (
+                                                                <button
+                                                                    key={l.id}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        updateActions(actions.map((x, i) => i === idx ? { ...x, targetLayerId: l.id } : x));
+                                                                        setOpenDropdown(null);
+                                                                    }}
+                                                                    className={`w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-primary/[0.04] transition-colors text-left rounded-lg ${ia.targetLayerId === l.id ? 'bg-primary/[0.08]' : ''}`}
+                                                                >
+                                                                    <div className={`size-5 rounded-md flex items-center justify-center shrink-0 ${ia.targetLayerId === l.id ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400'}`}>
+                                                                        <span className="material-symbols-outlined text-[12px]">{getLayerIcon(l.type)}</span>
+                                                                    </div>
+                                                                    <div className="flex flex-col items-start min-w-0">
+                                                                        <span className={`text-[9px] font-black tracking-tight truncate w-full text-left ${ia.targetLayerId === l.id ? 'text-primary' : 'text-gray-700'}`}>{l.name}</span>
+                                                                        <span className="text-[7px] text-gray-400 font-bold uppercase tracking-widest">{l.type}</span>
+                                                                    </div>
+                                                                </button>
+                                                            ))}
+                                                            {allLayersForIA.filter(l => !dropdownSearchTerm || l.name?.toLowerCase().includes(dropdownSearchTerm.toLowerCase())).length === 0 && dropdownSearchTerm && (
+                                                                <div className="p-4 text-center">
+                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase">No layers found</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Action */}
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Action</span>
+                                            <div className="relative">
+                                                <div
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setOpenDropdown(openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-action' ? null : { actionId: iaKey, type: 'ia-action' });
+                                                    }}
+                                                    className={`flex items-center justify-between px-2.5 py-1.5 bg-primary/[0.03] border rounded-lg hover:border-primary/30 transition-all cursor-pointer ${openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-action' ? 'border-primary ring-2 ring-primary/10' : 'border-primary/10'}`}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`size-5 rounded-md flex items-center justify-center shrink-0 ${currentAction ? 'bg-primary text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-400'}`}>
+                                                            <span className="material-symbols-outlined text-[12px]">{currentAction?.icon || 'bolt'}</span>
+                                                        </div>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-[9px] font-black text-primary uppercase tracking-tight leading-tight truncate">{currentAction?.label || 'Select Action'}</span>
+                                                            <span className="text-[7px] text-primary/40 font-bold uppercase tracking-widest leading-tight truncate">{currentAction?.desc}</span>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`material-symbols-outlined text-[13px] text-gray-300 transition-all shrink-0 ${openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-action' ? 'rotate-180 text-primary' : ''}`}>keyboard_arrow_down</span>
+                                                </div>
+                                                {openDropdown?.actionId === iaKey && openDropdown?.type === 'ia-action' && (
+                                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden" onMouseDown={(e) => e.stopPropagation()}>
+                                                        {IA_ACTION_OPTIONS.map(opt => (
+                                                            <button
+                                                                key={opt.id}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    updateActions(actions.map((x, i) => i === idx ? { ...x, action: opt.id } : x));
+                                                                    setOpenDropdown(null);
+                                                                }}
+                                                                className={`w-full flex items-center gap-2.5 px-3 py-2 hover:bg-primary/[0.04] transition-colors text-left ${ia.action === opt.id ? 'bg-primary/[0.08]' : ''}`}
+                                                            >
+                                                                <span className={`material-symbols-outlined text-[14px] shrink-0 ${ia.action === opt.id ? 'text-primary' : 'text-gray-400'}`}>{opt.icon}</span>
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className={`text-[9px] font-black uppercase tracking-tight leading-none truncate ${ia.action === opt.id ? 'text-primary' : 'text-gray-700'}`}>{opt.label}</span>
+                                                                    <span className="text-[7px] text-gray-400 font-bold uppercase tracking-widest mt-0.5 opacity-70 truncate">{opt.desc}</span>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     );
                 })()}

@@ -201,6 +201,7 @@ export interface InteractionAction {
   id: string;
   event: AnimationTriggerEvent;
   action: AnimationTriggerAction;
+  targetLayerId?: string; // if unset, targets the layer itself
 }
 
 export interface GuideLine {
@@ -1007,6 +1008,7 @@ const App: React.FC = () => {
   }, [mode]);
 
   const handleTriggerAction = (actionId: string, isActive: boolean) => {
+    console.log(`[App] handleTriggerAction: ${actionId} -> ${isActive}`);
     setActionStates(prev => ({ ...prev, [actionId]: isActive }));
   };
 
@@ -1698,8 +1700,10 @@ const App: React.FC = () => {
                            updates.scaleX !== undefined || updates.scaleY !== undefined || updates.scaleZ !== undefined ||
                            updates.skewX !== undefined || updates.skewY !== undefined;
     
+    const isInteractionUpdate = updates.interactionActions !== undefined;
+    
     // We want to sync if ANY of these properties change AND sync is enabled
-    const shouldSyncByName = isSyncEnabled && (isDynamicUpdate || isVariantUpdate || isUrlUpdate || isNameUpdate || isAnimationUpdate || isSpatialUpdate);
+    const shouldSyncByName = isSyncEnabled && (isDynamicUpdate || isVariantUpdate || isUrlUpdate || isNameUpdate || isAnimationUpdate || isSpatialUpdate || isInteractionUpdate);
     
     const namesToSyncRaw = new Set<string>();
     const nameRefData: Record<string, { dynamicData?: any[], label?: string, url?: string }> = {};
@@ -1803,6 +1807,32 @@ const App: React.FC = () => {
         }
     }
 
+    // Map from original targetLayerId to its name, used for cross-stage ID resolution
+    const interactionTargetNames = new Map<string, string>();
+    if (updates.interactionActions) {
+        updates.interactionActions.forEach(ia => {
+            if (ia.targetLayerId) {
+                const findNameRecursive = (ls: Layer[]): string | undefined => {
+                    for (const l of ls) {
+                        if (l.id === ia.targetLayerId) return l.name;
+                        if (l.children) {
+                            const found = findNameRecursive(l.children);
+                            if (found) return found;
+                        }
+                    }
+                    return undefined;
+                };
+                for (const s of stages) {
+                    const name = findNameRecursive(s.layers);
+                    if (name) {
+                        interactionTargetNames.set(ia.targetLayerId, name);
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
     setStages(prevStages => {
       const namesToSync = new Set<string>();
       if (shouldSyncByName) {
@@ -1894,6 +1924,34 @@ const App: React.FC = () => {
                 if (updates.scaleZ !== undefined) changes.scaleZ = updates.scaleZ;
                 if (updates.skewX !== undefined) changes.skewX = updates.skewX;
                 if (updates.skewY !== undefined) changes.skewY = updates.skewY;
+
+            if (updates.interactionActions !== undefined) {
+                if (isTargeted) {
+                    changes.interactionActions = updates.interactionActions;
+                } else {
+                    // Remap targetLayerId by name for synced layers in other stages
+                    changes.interactionActions = updates.interactionActions.map(ia => {
+                        if (ia.targetLayerId) {
+                            const targetName = interactionTargetNames.get(ia.targetLayerId);
+                            if (targetName) {
+                                const findInCurrent = (ls: Layer[]): string | undefined => {
+                                    for (const l of ls) {
+                                        if (l.name === targetName) return l.id;
+                                        if (l.children) {
+                                            const found = findInCurrent(l.children);
+                                            if (found) return found;
+                                        }
+                                    }
+                                    return undefined;
+                                };
+                                const mappedId = findInCurrent(currentStage.layers);
+                                if (mappedId) return { ...ia, targetLayerId: mappedId };
+                            }
+                        }
+                        return ia;
+                    });
+                }
+            }
             // Ensure animation updates are merged rather than replaced
             if (updates.animation !== undefined) {
                 if (updates.animation === null) {
@@ -5230,9 +5288,9 @@ const handleArrangeStages = React.useCallback(() => {
           if (newMode === 'preview') {
             setPreviewPlaybackStates(prev => {
               const reset: Record<string, { isPlaying: boolean, currentTime: number, loopsDone: number }> = {};
-              // Ensure all current stages are represented and set to play from start
+              // Only auto-play stages that have autoPlay explicitly set to true or undefined (default true)
               stages.forEach(s => {
-                reset[s.id] = { isPlaying: true, currentTime: 0, loopsDone: 0 };
+                reset[s.id] = { isPlaying: s.autoPlay === undefined || s.autoPlay === true, currentTime: 0, loopsDone: 0 };
               });
               return reset;
             });
@@ -5501,6 +5559,7 @@ const handleArrangeStages = React.useCallback(() => {
               actionStates={actionStates}
               editingLayerIds={editingLayerIds}
               fonts={fonts}
+              isInteractive={mode === 'preview'}
             />
           ) : (
             <>
