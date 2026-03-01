@@ -1968,9 +1968,31 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                 {isStageRatioLocked ? 'link' : 'link_off'}
                                             </span>
                                         </button>
-                                        <div className="flex-1">
+                                        <div className="flex-1 relative">
                                             {renderInput('Height', 'stageHeight', 'straighten')}
+                                            {currentStage.dynamicHeight && (
+                                                <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center rounded-lg pointer-events-none border border-primary/20">
+                                                    <span className="text-[10px] font-black text-primary tracking-widest">AUTO</span>
+                                                </div>
+                                            )}
                                         </div>
+                                    </div>
+
+                                    {/* Dynamic Height toggle for Stage */}
+                                    <div className="flex items-center justify-between border border-gray-100 rounded-xl px-4 py-3 bg-gray-50/50">
+                                        <div className="flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[16px] text-primary">height</span>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-bold text-gray-700 uppercase tracking-widest leading-none">Fit to Content</span>
+                                                <span className="text-[8px] text-gray-400 font-medium uppercase mt-1">Dynamic Height</span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            className={`relative w-9 h-5 rounded-full transition-colors ${currentStage.dynamicHeight ? 'bg-primary' : 'bg-gray-200'}`}
+                                            onClick={() => onUpdateStage(currentStage.id, { dynamicHeight: !currentStage.dynamicHeight })}
+                                        >
+                                            <div className={`absolute top-0.5 left-0.5 size-4 bg-white rounded-full shadow transition-transform ${currentStage.dynamicHeight ? 'translate-x-4' : ''}`} />
+                                        </button>
                                     </div>
 
                                     {renderInput('Stage Duration', 'stageDuration', 'schedule')}

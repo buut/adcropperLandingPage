@@ -1161,10 +1161,13 @@ const Timeline: React.FC<TimelineProps> = ({
                     }}
                     onSelect={(anim) => {
                         console.log(`Selected ${anim} for ${popupConfig.type} on layer ${popupConfig.layerId}`);
+                        const layer = visibleLayers.find(l => l.id === popupConfig.layerId);
+                        const currentSegment = layer?.animation?.[popupConfig.type] || {};
                         onUpdateLayerAnimation?.(popupConfig.layerId, {
                             [popupConfig.type]: {
-                                ...(visibleLayers.find(l => l.id === popupConfig.layerId)?.animation?.[popupConfig.type] || {}),
-                                name: anim
+                                ...currentSegment,
+                                name: anim,
+                                duration: currentSegment.duration || 70
                             }
                         });
                         setPopupConfig(null);
@@ -1508,10 +1511,13 @@ const Timeline: React.FC<TimelineProps> = ({
                     onClose={() => setTextAnimationPopupConfig(null)}
                     type={textAnimationPopupConfig.type}
                     onSelect={(animation) => {
+                        const layer = visibleLayers.find(l => l.id === textAnimationPopupConfig.layerId);
+                        const currentSegment = layer?.textAnimation?.[textAnimationPopupConfig.type] || {};
                         onUpdateTextAnimation?.(textAnimationPopupConfig.layerId, {
                             [textAnimationPopupConfig.type]: {
-                                ...(visibleLayers.find(l => l.parentId === textAnimationPopupConfig.layerId)?.textAnimation?.[textAnimationPopupConfig.type] || { start: 0, duration: 100 }),
-                                name: animation
+                                ...currentSegment,
+                                name: animation,
+                                duration: currentSegment.duration || 100
                             }
                         });
                         setTextAnimationPopupConfig(null);

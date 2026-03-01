@@ -198,6 +198,7 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
     const localRafRef = React.useRef<number | null>(null);
     const localAnimTimeRef = React.useRef(0);
     const localLastRef = React.useRef<number | null>(null);
+    const localTimerRef = React.useRef<any>(null);
     // RAF loop: advances localAnimTime while an interaction is active.
     // requestAnimationFrame is called OUTSIDE the state updater to avoid side-effect issues.
     React.useEffect(() => {
@@ -206,18 +207,34 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
             
             // Calculate starting time based on requested phase
             let startTime = 0;
+            let maxT = stageDuration || 10;
             const phase = interactionAnim.phase;
-            if (phase === 'entry' && layer.animation?.entry?.start) {
-                startTime = layer.animation.entry.start / 100;
-            } else if (phase === 'main' && layer.animation?.main?.start) {
-                startTime = layer.animation.main.start / 100;
-            } else if (phase === 'exit' && layer.animation?.exit?.start) {
-                startTime = layer.animation.exit.start / 100;
-            } else if (phase === 'all' && layer.animation?.entry?.start) {
-                startTime = layer.animation.entry.start / 100;
+            
+            // Normalize phase names for calculation
+            const isEntry = phase === 'entry' || phase === 'in';
+            const isMain = phase === 'main' || phase === 'middle' || phase === 'mid';
+            const isExit = phase === 'exit' || phase === 'out';
+            const isAll = phase === 'all' || phase === 'full';
+            
+            if (isEntry && layer.animation?.entry) {
+                startTime = (layer.animation.entry.start || 0) / 100;
+                maxT = ((layer.animation.entry.start || 0) + (layer.animation.entry.duration || 0)) / 100;
+            } else if (isMain && layer.animation?.main) {
+                startTime = (layer.animation.main.start || 0) / 100;
+                maxT = ((layer.animation.main.start || 0) + (layer.animation.main.duration || 0)) / 100;
+            } else if (isExit && layer.animation?.exit) {
+                startTime = (layer.animation.exit.start || 0) / 100;
+                maxT = ((layer.animation.exit.start || 0) + (layer.animation.exit.duration || 0)) / 100;
+            } else if (isAll) {
+                startTime = (layer.animation?.entry?.start || 0) / 100;
+                // If the user wants play-all, they expect to see Entry -> Main -> Exit.
+                // We stop at the end of the final Exit frame if it exists, otherwise stage end.
+                if (layer.animation?.exit) {
+                    maxT = ((layer.animation.exit.start || 0) + (layer.animation.exit.duration || 0)) / 100;
+                }
             }
             
-            console.log(`[LayerPreview] Local animation start time: ${startTime}s for layer ${layer.id}`);
+            console.log(`[LayerPreview] Local animation: ${phase} from ${startTime}s to ${maxT}s for layer ${layer.id}`);
             localAnimTimeRef.current = startTime;
             localLastRef.current = null;
             setLocalAnimTime(startTime);
@@ -226,18 +243,28 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                 if (localLastRef.current === null) localLastRef.current = timestamp;
                 const delta = Math.min((timestamp - localLastRef.current) / 1000, 0.05);
                 localLastRef.current = timestamp;
-                const maxT = stageDuration || 10;
+                
                 localAnimTimeRef.current = Math.min(localAnimTimeRef.current + delta, maxT);
                 setLocalAnimTime(localAnimTimeRef.current);
+                
                 if (localAnimTimeRef.current < maxT) {
                     localRafRef.current = requestAnimationFrame(tick);
                 } else {
                     console.log(`[LayerPreview] Finished local interaction animation for layer ${layer.id}`);
-                    setInteractionAnim(null); // Clear active once finished
+                    // Clear after a pause so the user sees the final state
+                    if (localTimerRef.current) clearTimeout(localTimerRef.current);
+                    localTimerRef.current = setTimeout(() => {
+                        setInteractionAnim(null);
+                        localTimerRef.current = null;
+                    }, 800); 
                 }
             };
             localRafRef.current = requestAnimationFrame(tick);
         } else {
+            if (localTimerRef.current) {
+                clearTimeout(localTimerRef.current);
+                localTimerRef.current = null;
+            }
             if (localRafRef.current !== null) {
                 console.log(`[LayerPreview] Stopping local interaction animation for layer ${layer.id}`);
                 cancelAnimationFrame(localRafRef.current);
@@ -245,6 +272,7 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
             }
         }
         return () => {
+            if (localTimerRef.current) clearTimeout(localTimerRef.current);
             if (localRafRef.current !== null) {
                 cancelAnimationFrame(localRafRef.current);
                 localRafRef.current = null;
@@ -1458,15 +1486,22 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
 
     const handleInteractionAction = (action: AnimationTriggerAction) => {
         console.log(`[LayerPreview] handleInteractionAction for layer: ${layer.id}, action: ${action}`);
-        switch (action) {
-            case 'play-entry': setInteractionAnim({ active: true, phase: 'entry' }); break;
-            case 'play-main':  setInteractionAnim({ active: true, phase: 'main' }); break;
-            case 'play-exit':  setInteractionAnim({ active: true, phase: 'exit' }); break;
-            case 'play-all':   setInteractionAnim({ active: true, phase: 'entry' }); break;
-            case 'stop':
-            case 'reset':      setInteractionAnim({ active: false, phase: null }); break;
-            case 'pause':      setInteractionAnim(prev => prev ? { ...prev, active: false } : null); break;
-            case 'resume':     setInteractionAnim(prev => prev ? { ...prev, active: true } : null); break;
+        const lowAction = String(action || '').toLowerCase();
+        
+        if (lowAction.includes('entry') || lowAction.includes('inbound')) {
+            setInteractionAnim({ active: true, phase: 'entry' });
+        } else if (lowAction.includes('main') || lowAction.includes('middle') || lowAction.includes('mid')) {
+            setInteractionAnim({ active: true, phase: 'main' });
+        } else if (lowAction.includes('exit') || lowAction.includes('outbound')) {
+            setInteractionAnim({ active: true, phase: 'exit' });
+        } else if (lowAction.includes('all') || lowAction.includes('full') || lowAction.includes('sequence')) {
+            setInteractionAnim({ active: true, phase: 'all' });
+        } else if (action === 'stop' || action === 'reset') {
+            setInteractionAnim({ active: false, phase: null });
+        } else if (action === 'pause') {
+            setInteractionAnim(prev => prev ? { ...prev, active: false } : null);
+        } else if (action === 'resume') {
+            setInteractionAnim(prev => prev ? { ...prev, active: true } : null);
         }
     };
 
@@ -1777,15 +1812,11 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
         animationDuration: '1s',
         animationTimingFunction: 'linear',
         animationFillMode: 'forwards',
-        animationDelay: interactionAnim?.active ? `-${localAnimTime}s` : (rawAnim ? `-${progress}s` : '0s'),
+        animationDelay: (rawAnim || interactionAnim?.active) ? `-${progress}s` : '0s',
         animationIterationCount: interactionAnim?.active
             ? (layer.animationLoopCount === 0 ? 'infinite' : (layer.animationLoopCount ?? 1))
             : 1,
-        // If it's preview mode and either an interaction is active or autoPlay is on, let it run.
-        // Otherwise it must be paused so it only moves when we scrub the timeline.
-        animationPlayState: (isPreviewMode && (interactionAnim?.active || layer.animationAutoPlay === undefined || layer.animationAutoPlay === true))
-            ? 'running'
-            : (interactionAnim?.active ? 'running' : 'paused'),
+        animationPlayState: interactionAnim?.active ? 'running' : 'paused',
         // Critical: Ensure the wrapper (which might have a CSS animation) uses the correct origin
         transformOrigin: (effectiveStyles as any)?.transformOrigin,
         transformStyle: 'preserve-3d',
@@ -1816,13 +1847,12 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                 animationDuration: '1s',
                 animationTimingFunction: 'linear',
                 animationFillMode: 'forwards',
-                animationDelay: interactionAnim?.active ? `-${localAnimTime}s` : (textRawAnim ? `-${textProgress}s` : '0s'),
+                animationDelay: (textRawAnim || interactionAnim?.active) ? `-${textProgress}s` : '0s',
                 animationIterationCount: interactionAnim?.active
                     ? (layer.animationLoopCount === 0 ? 'infinite' : (layer.animationLoopCount ?? 1))
                     : 1,
-                animationPlayState: (isPreviewMode && (interactionAnim?.active || layer.animationAutoPlay === undefined || layer.animationAutoPlay === true))
-                    ? 'running'
-                    : (interactionAnim?.active ? 'running' : 'paused'),
+                animationPlayState: interactionAnim?.active ? 'running' : 'paused',
+                transformOrigin: (textEffectiveStyles as any)?.transformOrigin,
             }
         };
     };
@@ -2131,6 +2161,12 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                             whiteSpace: (maxLinesVal === 1 && isShrinkToFit) ? 'nowrap' : 'pre-wrap',
                             transition: 'none !important',
                             ...getExtraTextProps().style,
+                            animationName: textRawAnim ? `tkf-${textAnimName}` : 'none',
+                            animationDuration: '1s',
+                            animationTimingFunction: 'linear',
+                            animationFillMode: 'forwards',
+                            animationDelay: `-${textProgress}s`,
+                            animationPlayState: interactionAnim?.active ? 'running' : 'paused',
                             transform: textRawAnim ? undefined : (textEffectiveStyles as any)?.transform,
                             transformOrigin: (textEffectiveStyles as any)?.transformOrigin,
                             opacity: textEffectiveStyles ? (textEffectiveStyles as any).opacity : undefined,

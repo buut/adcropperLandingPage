@@ -227,6 +227,7 @@ export interface Stage {
   y: number;
   width: number;
   height: number;
+  dynamicHeight?: boolean;
   layers: Layer[];
   duration: number;
   markers?: TimelineMarker[];
@@ -901,22 +902,25 @@ const App: React.FC = () => {
               }
           }
 
-          if (effectiveLoopCount !== -1 && currentLoopsDone === effectiveLoopCount) {
+          // 1. If we are in the last (or past the last) loop, stop at the stop second.
+          if (effectiveLoopCount !== -1 && currentLoopsDone >= effectiveLoopCount - 1) {
             if (newTime >= effectiveStopAtSecond) {
-              next[stage.id] = { isPlaying: false, currentTime: effectiveStopAtSecond, loopsDone: currentLoopsDone };
+              next[stage.id] = { isPlaying: false, currentTime: effectiveStopAtSecond, loopsDone: Math.min(effectiveLoopCount, currentLoopsDone + 1) };
               hasChanged = true;
               return;
             }
           }
 
+          // 2. Otherwise, if we reach the end of a cycle, wrap it around
           if (newTime >= durationInSeconds) {
-            if (effectiveLoopCount === -1 || currentLoopsDone < effectiveLoopCount) {
+            if (effectiveLoopCount === -1 || currentLoopsDone < effectiveLoopCount - 1) {
               newTime = Math.max(0, newTime - durationInSeconds);
               currentLoopsDone += 1;
             } else {
-              next[stage.id] = { isPlaying: false, currentTime: effectiveStopAtSecond, loopsDone: currentLoopsDone };
-              hasChanged = true;
-              return;
+                // Should have been caught by (1), but for absolute safety:
+                next[stage.id] = { isPlaying: false, currentTime: effectiveStopAtSecond, loopsDone: Math.max(effectiveLoopCount, currentLoopsDone + 1) };
+                hasChanged = true;
+                return;
             }
           }
 
@@ -1561,6 +1565,24 @@ const App: React.FC = () => {
     if (minX === Infinity) return null;
     return { minX, minY, maxX, maxY };
   };
+
+  useEffect(() => {
+    let needsUpdate = false;
+    const nextStages = stages.map(s => {
+      if (s.dynamicHeight) {
+        const bounds = computeGroupBoundsFromChildren(s.layers);
+        const desiredH = bounds ? Math.max(100, Math.ceil(bounds.maxY + 80)) : s.height;
+        if (Math.abs(desiredH - s.height) > 0.5) {
+          needsUpdate = true;
+          return { ...s, height: desiredH };
+        }
+      }
+      return s;
+    });
+    if (needsUpdate) {
+      setStages(nextStages);
+    }
+  }, [stages]);
 
   const handleUpdateLayers = (layerIds: string[], updates: Partial<Layer>, isBatch: boolean = false, targetLayerId?: string) => {
     // Track last used text styles if font properties are updated
@@ -2260,10 +2282,23 @@ const App: React.FC = () => {
       };
 
 
-      return prevStages.map(stage => ({
-        ...stage,
-        layers: updateRecursive(stage.layers, stage, true, false)
-      }));
+      return prevStages.map(stage => {
+        const updatedLayers = updateRecursive(stage.layers, stage, true, false);
+        let finalHeight = stage.height;
+        if (stage.dynamicHeight) {
+          const bounds = computeGroupBoundsFromChildren(updatedLayers);
+          if (bounds) {
+            // Adjust stage height to fit the content maxY. 
+            // We use maxY because stages are usually 0-based at the top.
+            finalHeight = Math.max(10, bounds.maxY + 80);
+          }
+        }
+        return {
+          ...stage,
+          layers: updatedLayers,
+          height: finalHeight
+        };
+      });
     });
 
     broadcastAction({
@@ -2768,17 +2803,72 @@ const App: React.FC = () => {
   const handleUpdateLayerAnimation = (layerId: string, updates: Partial<Layer['animation']> | null) => {
     if (updates === null) {
       handleUpdateLayers([layerId], { animation: null as any });
-    } else {
-      handleUpdateLayers([layerId], { animation: updates as any });
+      return;
     }
+
+    // Find the current layer to get its current animation state
+    let currentAnim: any = null;
+    const findInStages = (stgs: Stage[]): any | null => {
+      const findRec = (ls: Layer[]): any | null => {
+        for (const l of ls) {
+          if (l.id === layerId) return l.animation;
+          if (l.children) {
+            const f = findRec(l.children);
+            if (f) return f;
+          }
+        }
+        return null;
+      };
+      for (const s of stgs) {
+        const f = findRec(s.layers);
+        if (f) return f;
+      }
+      return null;
+    };
+    
+    currentAnim = findInStages(stages) || {};
+    
+    handleUpdateLayers([layerId], { 
+      animation: { 
+        ...currentAnim, 
+        ...updates 
+      } 
+    });
   };
 
   const handleUpdateTextAnimation = (layerId: string, updates: Partial<Layer['textAnimation']> | null) => {
     if (updates === null) {
       handleUpdateLayers([layerId], { textAnimation: null as any });
-    } else {
-      handleUpdateLayers([layerId], { textAnimation: updates as any });
+      return;
     }
+
+    let currentAnim: any = null;
+    const findInStages = (stgs: Stage[]): any | null => {
+      const findRec = (ls: Layer[]): any | null => {
+        for (const l of ls) {
+          if (l.id === layerId) return l.textAnimation;
+          if (l.children) {
+            const f = findRec(l.children);
+            if (f) return f;
+          }
+        }
+        return null;
+      };
+      for (const s of stgs) {
+        const f = findRec(s.layers);
+        if (f) return f;
+      }
+      return null;
+    };
+    
+    currentAnim = findInStages(stages) || {};
+    
+    handleUpdateLayers([layerId], { 
+      textAnimation: { 
+        ...currentAnim, 
+        ...updates 
+      } 
+    });
   };
 
   const handleCopyAnimation = (layerId: string) => {
@@ -4521,6 +4611,12 @@ const App: React.FC = () => {
         newStage.layers = rescaleLayers(stage.layers);
       }
 
+      if (newStage.dynamicHeight) {
+        const bounds = computeGroupBoundsFromChildren(newStage.layers);
+        if (bounds) {
+          newStage.height = Math.max(100, Math.ceil(bounds.maxY + 80));
+        }
+      }
       return newStage;
     }));
     broadcastAction({

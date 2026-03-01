@@ -306,7 +306,7 @@ export const getAnimationStyles = (
             startFrame = endFrame;
         } else {
             for (let i = 0; i < keyframePoints.length - 1; i++) {
-                if (pUnits >= keyframePoints[i].p && pUnits <= keyframePoints[i + 1].p) {
+                if (pUnits >= keyframePoints[i].p && pUnits < keyframePoints[i + 1].p) {
                     startFrame = keyframePoints[i];
                     endFrame = keyframePoints[i + 1];
                     break;
@@ -679,9 +679,28 @@ export const getInterpolatedLayerStyles = (
 
     // Fallback for Animation Segments (t = timeInUnits yuvarlanmış, segment sınırı kaymasını önler)
     const animation = layer.animation || {};
-    const entry = animation.entry || { start: 0, duration: 0 };
-    const main = animation.main || { start: entry.start + entry.duration, duration: 0 };
-    const exit = animation.exit || { start: main.start + main.duration, duration: 0 };
+    
+    const entry = {
+        name: animation.entry?.name || 'none',
+        start: animation.entry?.start ?? 0,
+        duration: animation.entry?.duration ?? 0,
+        easing: animation.entry?.easing || 'ease-in-out'
+    };
+
+    const main = {
+        name: animation.main?.name || 'none',
+        start: animation.main?.start ?? (entry.start + entry.duration),
+        duration: animation.main?.duration ?? 0,
+        easing: animation.main?.easing || 'ease-in-out',
+        repeat: animation.main?.repeat ?? 1
+    };
+
+    const exit = {
+        name: animation.exit?.name || 'none',
+        start: animation.exit?.start ?? (main.start + main.duration),
+        duration: animation.exit?.duration ?? 0,
+        easing: animation.exit?.easing || 'ease-in-out'
+    };
 
     const entryEnd = entry.start + entry.duration;
     const mainEnd = main.start + main.duration;
@@ -691,10 +710,14 @@ export const getInterpolatedLayerStyles = (
     
     // Hold over helpers for maintaining end-state frames:
     const getEntryEndState = () => (entry.name && entry.duration > 0) ? getAnimationStyles(entry.name, 1, 'entry') : { _scaleX: 1, _scaleY: 1, _rotation: 0 };
-    const getMainEndState = () => (main.name && main.duration > 0 && typeof main.repeat !== 'string') ? getAnimationStyles(main.name, 1, 'main') : getEntryEndState();
+    const getMainEndState = () => {
+        if (!main.name || main.duration <= 0) return getEntryEndState();
+        return getAnimationStyles(main.name, 1, 'main');
+    };
 
     if (t < entry.start) {
-        if (layer.type !== 'text') {
+        // Before entry: Object should be hidden during preview
+        if (isPreviewMode) {
             activeAnimStyles = { opacity: 0, pointerEvents: 'none' };
         }
     } else if (t < entryEnd) {
@@ -703,7 +726,7 @@ export const getInterpolatedLayerStyles = (
     } else if (t < main.start) {
         // Gap between Entry and Main: Object holds the exact final frame of Entry
         activeAnimStyles = getEntryEndState();
-    } else if (t < mainEnd) {
+    } else if (t < mainEnd || (typeof main.repeat === 'string' && main.repeat.toLowerCase() === 'infinite' && t < exit.start)) {
         // Main: animasyon varsa uygula; yoksa katman dinlenme halinde (scale/rotation açıkça 1/0).
         if (main.name && main.duration > 0) {
             const rel = Math.max(0, timeInUnits - main.start);
@@ -711,8 +734,8 @@ export const getInterpolatedLayerStyles = (
             const cycle = repeatCount === Infinity ? main.duration : main.duration / repeatCount;
             // Stop at exactly 1 on the last loop to avoid jumping back to 0
             const isLastTick = repeatCount !== Infinity && rel >= main.duration - 1;
-            const rawProgress = (cycle > 0) ? Math.min(0.9999, isLastTick ? 0.9999 : (rel % cycle) / cycle) : 1;
-            activeAnimStyles = getAnimationStyles(main.name, applyEasing(rawProgress, main.easing), 'main');
+            const rawProgress = (cycle > 0) ? (isLastTick ? 1 : (rel % cycle) / cycle) : 1;
+            activeAnimStyles = getAnimationStyles(main.name, applyEasing(Math.min(1, rawProgress), main.easing), 'main');
         } else {
             activeAnimStyles = getEntryEndState();
         }
@@ -724,9 +747,13 @@ export const getInterpolatedLayerStyles = (
         const rawProgress = exit.duration > 0 ? Math.min(1, Math.max(0, (timeInUnits - exit.start) / exit.duration)) : 1;
         activeAnimStyles = getAnimationStyles(exit.name, applyEasing(rawProgress, exit.easing), 'exit');
     } else {
-        // Past Exit End: Object should disappear unless it's a text layer.
-        if (layer.type !== 'text') {
-            activeAnimStyles = { opacity: 0, pointerEvents: 'none' };
+        // Past Exit End: Object holds its final sequence state.
+        // If an exit animation exists, it will likely be opacity: 0.
+        // If none exists, it will stay visible in its main end state.
+        if (exit.name && exit.name !== 'none' && exit.duration > 0) {
+            activeAnimStyles = getAnimationStyles(exit.name, 1, 'exit');
+        } else {
+            activeAnimStyles = getMainEndState();
         }
     }
 
