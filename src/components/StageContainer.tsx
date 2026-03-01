@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { BreakpointName, BREAKPOINT_COLORS, BREAKPOINT_ABBR, LandingPageAction } from '../App';
 
 interface StageContainerProps {
     id: string;
@@ -29,6 +30,8 @@ interface StageContainerProps {
     isTextToolActive?: boolean;
     onUpdateName?: (name: string) => void;
     cursor?: string;
+    breakpoint?: BreakpointName;
+    onLandingPageAction?: (action: LandingPageAction) => void;
 }
 
 const StageContainer: React.FC<StageContainerProps> = ({
@@ -59,7 +62,9 @@ const StageContainer: React.FC<StageContainerProps> = ({
     overflow,
     isTextToolActive = false,
     onUpdateName,
-    cursor
+    cursor,
+    breakpoint,
+    onLandingPageAction,
 }) => {
     const [isVisible, setIsVisible] = useState(false);
     const [isGlowing, setIsGlowing] = useState(false);
@@ -251,8 +256,16 @@ const StageContainer: React.FC<StageContainerProps> = ({
                     <span onClick={(e) => {
                         e.stopPropagation();
                         onBreadcrumbClick?.(null);
-                    }} className="hover:text-primary transition-colors cursor-pointer truncate block w-full" title={`${name} - ${width}x${height}`}>
-                        {name} - {width}x{height}
+                    }} className="hover:text-primary transition-colors cursor-pointer flex items-center gap-1.5 truncate w-full" title={`${name} - ${width}x${height}`}>
+                        <span className="truncate">{name} - {width}x{height}</span>
+                        {breakpoint && (
+                            <span
+                                className="shrink-0 px-1 py-0.5 rounded text-white font-black normal-case leading-none"
+                                style={{ background: BREAKPOINT_COLORS[breakpoint], fontSize: `${9 / zoom}px` }}
+                            >
+                                {BREAKPOINT_ABBR[breakpoint]}
+                            </span>
+                        )}
                     </span>
                 )}
             </div>

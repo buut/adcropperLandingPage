@@ -3,7 +3,7 @@ import { cleanFileName } from '../utils/fileUtils';
 import { AppMode } from './Header';
 import InteractiveEffectPopup, { interactiveEffects, visualEffects } from './InteractiveEffectPopup';
 
-import { Stage, Layer, StageAction, FontData } from '../App';
+import { Stage, Layer, StageAction, FontData, InteractionAction, AnimationTriggerEvent, AnimationTriggerAction, LandingPageAction, LandingPageTrigger, LandingPageActionType, BreakpointName } from '../App';
 import WidgetCodeEditor from './WidgetCodeEditor';
 import FontSelector from './FontSelector';
 import WeightSelector from './WeightSelector';
@@ -2085,15 +2085,17 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                             </label>
                                             <p className="text-[9px] text-gray-400 font-medium pl-6">Automate interactivity & effects</p>
                                         </div>
-                                        <button 
+                                        <button
                                             onClick={() => {
                                                 const allLayers = getAllLayers(currentStage!.layers);
-                                                const newActions = [...(currentStage!.actions || []), {
-                                                    id: Math.random().toString(36).substr(2, 9),
-                                                    triggerSourceId: 'stage',
-                                                    triggerTargetId: allLayers[0]?.id || '',
-                                                    actionType: 'shine'
-                                                }];
+                                                const newAction: LandingPageAction = {
+                                                    id: Math.random().toString(36).slice(2, 9),
+                                                    triggerSourceId: allLayers[0]?.id || 'stage',
+                                                    triggerEvent: 'click',
+                                                    actionType: 'scroll-to-section',
+                                                    targetId: '',
+                                                };
+                                                const newActions = [...(currentStage!.actions || []), newAction];
                                                 onUpdateStage(currentStage!.id, { actions: newActions });
                                             }}
                                             className="size-8 rounded-xl bg-primary text-white flex items-center justify-center hover:bg-primary-dark transition-all shadow-md shadow-primary/20 group/add"
@@ -2108,7 +2110,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                 <span className="material-symbols-outlined text-[32px]">touch_app</span>
                                             </div>
                                             <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-loose">No actions defined for this stage yet.</h5>
-                                            <p className="text-[9px] text-gray-400 font-medium px-4 mt-2">Click the plus button to start automating your banner interactions.</p>
+                                            <p className="text-[9px] text-gray-400 font-medium px-4 mt-2">Click + to define landing page interactions like scroll, menus, or navigation.</p>
                                         </div>
                                     ) : (
                                         <div className="flex flex-col gap-3">
@@ -2234,24 +2236,26 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                     Interaction Event
                                                                 </label>
                                                             </div>
-                                                            <div className="flex bg-gray-100 p-0.5 rounded-xl border border-gray-200/50">
-                                                                {[
-                                                                    { id: 'click', label: 'Click', icon: 'touch_app' },
-                                                                    { id: 'mouseover', label: 'Over', icon: 'ads_click' },
-                                                                    { id: 'mouseout', label: 'Out', icon: 'eject' }
-                                                                ].map((opt) => (
-                                                                    <button 
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {([
+                                                                    { id: 'click',            label: 'Click',   icon: 'touch_app' },
+                                                                    { id: 'hover',            label: 'Over',    icon: 'ads_click' },
+                                                                    { id: 'hoverEnd',         label: 'Out',     icon: 'eject' },
+                                                                    { id: 'touchStart',       label: 'Touch',   icon: 'fingerprint' },
+                                                                    { id: 'scroll-into-view', label: 'Scroll',  icon: 'swipe_down' },
+                                                                ] as { id: LandingPageTrigger; label: string; icon: string }[]).map((opt) => (
+                                                                    <button
                                                                         key={opt.id}
                                                                         onClick={() => {
                                                                             const sc = stages.find(s => s.id === selectedStageId);
                                                                             if (!sc) return;
                                                                             const newActions = [...(sc.actions || [])];
-                                                                            newActions[idx] = { ...action, eventType: opt.id as any };
-                                                                            onUpdateStage(sc.id, { actions: newActions });
+                                                                            newActions[idx] = { ...action, triggerEvent: opt.id };
+                                                                            onUpdateStage(sc.id, { actions: newActions as LandingPageAction[] });
                                                                         }}
-                                                                        className={`flex-1 h-8 flex items-center justify-center gap-2 rounded-lg transition-all text-[9.5px] font-black uppercase tracking-tight ${ (action.eventType || 'click') === opt.id ? 'bg-white text-primary shadow-sm border border-gray-200/50' : 'text-gray-400 hover:text-gray-600' }`}
+                                                                        className={`flex-1 min-w-[50px] h-8 flex items-center justify-center gap-1.5 rounded-lg transition-all text-[9px] font-black uppercase tracking-tight border ${ (action.triggerEvent || 'click') === opt.id ? 'bg-white text-primary shadow-sm border-gray-200/50' : 'text-gray-400 border-transparent hover:text-gray-600 hover:border-gray-100' }`}
                                                                     >
-                                                                        <span className="material-symbols-outlined text-[14px]">{opt.icon}</span>
+                                                                        <span className="material-symbols-outlined text-[13px]">{opt.icon}</span>
                                                                         {opt.label}
                                                                     </button>
                                                                 ))}
@@ -2272,17 +2276,17 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                     className={`flex items-center justify-between p-2 bg-gray-50/50 border rounded-lg hover:border-primary/30 transition-all cursor-pointer ${openDropdown?.actionId === action.id && openDropdown?.type === 'target' ? 'border-primary ring-2 ring-primary/10' : 'border-gray-100'}`}
                                                                 >
                                                                     <div className="flex items-center gap-2 min-w-0">
-                                                                        <div className={`size-6 rounded-md flex items-center justify-center shrink-0 ${action.triggerTargetId ? 'bg-primary text-white shadow-sm' : 'bg-white text-gray-400 border border-gray-100'}`}>
+                                                                        <div className={`size-6 rounded-md flex items-center justify-center shrink-0 ${action.targetId ? 'bg-primary text-white shadow-sm' : 'bg-white text-gray-400 border border-gray-100'}`}>
                                                                             <span className="material-symbols-outlined text-[14px]">
-                                                                                {getLayerIcon(allLayers.find(l => l.id === action.triggerTargetId)?.type || '')}
+                                                                                {getLayerIcon(allLayers.find(l => l.id === action.targetId)?.type || '')}
                                                                             </span>
                                                                         </div>
                                                                         <div className="flex flex-col min-w-0">
                                                                             <span className="text-[9px] font-black text-gray-900 tracking-tight truncate leading-tight">
-                                                                                {(allLayers.find(l => l.id === action.triggerTargetId)?.name || 'Select Target')}
+                                                                                {(allLayers.find(l => l.id === action.targetId)?.name || stages.find(s => s.id === action.targetId)?.name || 'Select Target')}
                                                                             </span>
                                                                             <span className="text-[8px] text-gray-400 font-bold truncate tracking-tight uppercase leading-tight">
-                                                                                {action.triggerTargetId ? `ID: ${action.triggerTargetId?.split('_')[1] || action.triggerTargetId}` : 'Target Layer'}
+                                                                                {action.targetId ? `ID: ${action.targetId?.split('_')[1] || action.targetId}` : 'Target Layer / Section'}
                                                                             </span>
                                                                         </div>
                                                                     </div>
@@ -2306,28 +2310,31 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                             </div>
                                                                         </div>
                                                                          <div className="max-h-[180px] overflow-y-auto custom-scrollbar">
-                                                                             {(!dropdownSearchTerm || 'stage'.includes(dropdownSearchTerm.toLowerCase())) && (
+                                                                             {/* Stages as targets (for scroll-to-section) */}
+                                                                             {stages.filter(s => s.id !== selectedStageId && (!dropdownSearchTerm || s.name.toLowerCase().includes(dropdownSearchTerm.toLowerCase()))).map(s => (
                                                                                  <button
+                                                                                     key={s.id}
                                                                                      onClick={() => {
-                                                                                         const sc = stages.find(s => s.id === selectedStageId);
+                                                                                         const sc = stages.find(st => st.id === selectedStageId);
                                                                                          if (!sc) return;
                                                                                          const newActions = [...(sc.actions || [])];
-                                                                                         newActions[idx] = { ...action, triggerTargetId: 'stage' };
-                                                                                         onUpdateStage(sc.id, { actions: newActions });
+                                                                                         newActions[idx] = { ...action, targetId: s.id };
+                                                                                         onUpdateStage(sc.id, { actions: newActions as LandingPageAction[] });
                                                                                          setOpenDropdown(null);
                                                                                      }}
-                                                                                     className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 transition-all hover:bg-primary/5 group/opt ${action.triggerTargetId === 'stage' ? 'bg-primary/[0.03]' : ''}`}
+                                                                                     className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 transition-all hover:bg-primary/5 group/opt ${action.targetId === s.id ? 'bg-primary/[0.03]' : ''}`}
                                                                                  >
-                                                                                     <div className={`size-6 rounded-md flex items-center justify-center shrink-0 transition-all ${action.triggerTargetId === 'stage' ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400 group-hover/opt:bg-white group-hover/opt:text-primary'}`}>
-                                                                                         <span className="material-symbols-outlined text-[14px]">aspect_ratio</span>
+                                                                                     <div className={`size-6 rounded-md flex items-center justify-center shrink-0 transition-all ${action.targetId === s.id ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400 group-hover/opt:bg-white group-hover/opt:text-primary'}`}>
+                                                                                         <span className="material-symbols-outlined text-[14px]">web_asset</span>
                                                                                      </div>
                                                                                      <div className="flex flex-col items-start min-w-0">
-                                                                                         <span className={`text-[9px] font-black uppercase tracking-tight ${action.triggerTargetId === 'stage' ? 'text-primary' : 'text-gray-700'}`}>STAGE</span>
-                                                                                         <span className="text-[7px] text-gray-400 font-bold tracking-tight">GLOBAL TARGET</span>
+                                                                                         <span className={`text-[9px] font-black tracking-tight truncate w-full text-left ${action.targetId === s.id ? 'text-primary' : 'text-gray-700'}`}>{s.name}</span>
+                                                                                         <span className="text-[7px] text-gray-400 font-bold tracking-tight uppercase">Section</span>
                                                                                      </div>
                                                                                  </button>
-                                                                             )}
-                                                                             
+                                                                             ))}
+
+                                                                             {/* Layers as targets */}
                                                                              {allLayers
                                                                                 .filter(l => l.name.toLowerCase().includes(dropdownSearchTerm.toLowerCase()) || l.type.toLowerCase().includes(dropdownSearchTerm.toLowerCase()))
                                                                                 .map(l => (
@@ -2337,18 +2344,18 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                                         const sc = stages.find(s => s.id === selectedStageId);
                                                                                         if (!sc) return;
                                                                                         const newActions = [...(sc.actions || [])];
-                                                                                        newActions[idx] = { ...action, triggerTargetId: l.id };
-                                                                                        onUpdateStage(sc.id, { actions: newActions });
+                                                                                        newActions[idx] = { ...action, targetId: l.id };
+                                                                                        onUpdateStage(sc.id, { actions: newActions as LandingPageAction[] });
                                                                                         setOpenDropdown(null);
                                                                                     }}
-                                                                                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 transition-all hover:bg-primary/5 group/opt ${action.triggerTargetId === l.id ? 'bg-primary/[0.03]' : ''}`}
+                                                                                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 transition-all hover:bg-primary/5 group/opt ${action.targetId === l.id ? 'bg-primary/[0.03]' : ''}`}
                                                                                 >
-                                                                                    <div className={`size-6 rounded-md flex items-center justify-center shrink-0 transition-all ${action.triggerTargetId === l.id ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400 group-hover/opt:bg-white group-hover/opt:text-primary'}`}>
+                                                                                    <div className={`size-6 rounded-md flex items-center justify-center shrink-0 transition-all ${action.targetId === l.id ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400 group-hover/opt:bg-white group-hover/opt:text-primary'}`}>
                                                                                         <span className="material-symbols-outlined text-[14px]">{getLayerIcon(l.type)}</span>
                                                                                     </div>
                                                                                     <div className="flex flex-col items-start min-w-0">
-                                                                                        <span className={`text-[9px] font-black tracking-tight truncate w-full text-left ${action.triggerTargetId === l.id ? 'text-primary' : 'text-gray-700'}`}>{l.name}</span>
-                                                                                        <span className="text-[7px] text-gray-400 font-bold tracking-tight uppercase">{l.type} LAYER</span>
+                                                                                        <span className={`text-[9px] font-black tracking-tight truncate w-full text-left ${action.targetId === l.id ? 'text-primary' : 'text-gray-700'}`}>{l.name}</span>
+                                                                                        <span className="text-[7px] text-gray-400 font-bold tracking-tight uppercase">{l.type} Layer</span>
                                                                                     </div>
                                                                                 </button>
                                                                             ))}
@@ -2360,192 +2367,121 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
 
                                                         <div className="flex flex-col gap-1.5 action-selector-container">
                                                             <label className="text-[10px] text-gray-900 font-black uppercase tracking-widest flex items-center gap-2 mb-1">
-                                                                <span className="material-symbols-outlined text-[16px] text-primary">auto_awesome</span>
-                                                                Action Effect
+                                                                <span className="material-symbols-outlined text-[16px] text-primary">bolt</span>
+                                                                Action Type
                                                             </label>
-                                                            <div className="relative group/efx-select">
-                                                                <div 
-                                                                    onClick={() => setOpenDropdown(openDropdown?.actionId === action.id && openDropdown?.type === 'effect' ? null : { actionId: action.id, type: 'effect' })}
-                                                                    className={`flex items-center justify-between p-2 bg-primary/[0.03] border rounded-lg hover:border-primary/30 transition-all cursor-pointer ${openDropdown?.actionId === action.id && openDropdown?.type === 'effect' ? 'border-primary ring-2 ring-primary/10' : 'border-primary/10'}`} 
-                                                                >
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className={`size-6 rounded-md flex items-center justify-center transition-colors ${action.actionType && action.actionType !== 'none' ? 'bg-primary text-white shadow-sm' : 'bg-white text-gray-400 border border-gray-100'}`}>
-                                                                            <span className="material-symbols-outlined text-[14px]">
-                                                                                {visualEffects.find(f => f.id === (action.actionType || 'none'))?.icon || 'auto_awesome'}
-                                                                            </span>
+                                                            {(() => {
+                                                                const LP_ACTION_OPTIONS: { id: LandingPageActionType; label: string; icon: string; desc: string }[] = [
+                                                                    { id: 'scroll-to-section', label: 'Scroll to Section', icon: 'swipe_down', desc: 'Smooth scroll to another section' },
+                                                                    { id: 'open-menu',         label: 'Open Menu',        icon: 'menu_open',  desc: 'Show a navigation menu layer' },
+                                                                    { id: 'close-menu',        label: 'Close Menu',       icon: 'close',      desc: 'Hide a navigation menu layer' },
+                                                                    { id: 'toggle-layer',      label: 'Toggle Layer',     icon: 'layers',     desc: 'Show or hide a layer' },
+                                                                    { id: 'navigate-url',      label: 'Navigate to URL',  icon: 'open_in_new', desc: 'Open a link in browser' },
+                                                                    { id: 'play-animation',    label: 'Play Animation',   icon: 'play_circle', desc: 'Trigger a layer animation' },
+                                                                    { id: 'stop-animation',    label: 'Stop Animation',   icon: 'stop_circle', desc: 'Stop a layer animation' },
+                                                                    { id: 'toggle-animation',  label: 'Toggle Animation', icon: 'motion_photos_on', desc: 'Play or stop animation' },
+                                                                ];
+                                                                const current = LP_ACTION_OPTIONS.find(o => o.id === action.actionType);
+                                                                return (
+                                                                    <div className="relative group/efx-select">
+                                                                        <div
+                                                                            onClick={() => setOpenDropdown(openDropdown?.actionId === action.id && openDropdown?.type === 'effect' ? null : { actionId: action.id, type: 'effect' })}
+                                                                            className={`flex items-center justify-between p-2 bg-primary/[0.03] border rounded-lg hover:border-primary/30 transition-all cursor-pointer ${openDropdown?.actionId === action.id && openDropdown?.type === 'effect' ? 'border-primary ring-2 ring-primary/10' : 'border-primary/10'}`}
+                                                                        >
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className={`size-6 rounded-md flex items-center justify-center transition-colors ${current ? 'bg-primary text-white shadow-sm' : 'bg-white text-gray-400 border border-gray-100'}`}>
+                                                                                    <span className="material-symbols-outlined text-[14px]">{current?.icon || 'bolt'}</span>
+                                                                                </div>
+                                                                                <div className="flex flex-col min-w-0">
+                                                                                    <span className="text-[9px] font-black text-primary uppercase tracking-tight leading-tight truncate">{current?.label || 'Select Action'}</span>
+                                                                                    <span className="text-[8px] text-primary/40 font-bold uppercase tracking-widest leading-tight truncate">{current?.desc}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <span className={`material-symbols-outlined text-gray-300 text-[14px] transition-all ${openDropdown?.actionId === action.id && openDropdown?.type === 'effect' ? 'rotate-180 text-primary' : ''}`}>keyboard_arrow_down</span>
                                                                         </div>
-                                                                        <div className="flex flex-col min-w-0">
-                                                                            <span className="text-[9px] font-black text-primary uppercase tracking-tight leading-tight truncate">
-                                                                                {visualEffects.find(f => f.id === (action.actionType || 'none'))?.label || 'None'}
-                                                                            </span>
-                                                                            <span className="text-[8px] text-primary/40 font-bold uppercase tracking-widest leading-tight truncate">
-                                                                                {visualEffects.find(f => f.id === (action.actionType || 'none'))?.description}
-                                                                            </span>
-                                                                        </div>
+                                                                        {openDropdown?.actionId === action.id && openDropdown?.type === 'effect' && (
+                                                                            <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-md overflow-hidden">
+                                                                                <div className="flex flex-col max-h-[220px] overflow-y-auto custom-scrollbar">
+                                                                                    {LP_ACTION_OPTIONS.map(opt => (
+                                                                                        <button
+                                                                                            key={opt.id}
+                                                                                            onClick={() => {
+                                                                                                const sc = stages.find(s => s.id === selectedStageId);
+                                                                                                if (!sc) return;
+                                                                                                const nextActions = [...(sc.actions || [])];
+                                                                                                nextActions[idx] = { ...action, actionType: opt.id, config: {} };
+                                                                                                onUpdateStage(sc.id, { actions: nextActions as LandingPageAction[] });
+                                                                                                setOpenDropdown(null);
+                                                                                            }}
+                                                                                            className={`w-full px-3 py-2 flex items-center gap-2.5 hover:bg-primary/[0.04] transition-colors text-left ${action.actionType === opt.id ? 'bg-primary/[0.08]' : ''}`}
+                                                                                        >
+                                                                                            <span className={`material-symbols-outlined text-[14px] ${action.actionType === opt.id ? 'text-primary' : 'text-gray-400'}`}>{opt.icon}</span>
+                                                                                            <div className="flex flex-col min-w-0">
+                                                                                                <span className={`text-[9px] font-black uppercase tracking-tight leading-none truncate ${action.actionType === opt.id ? 'text-primary' : 'text-gray-700'}`}>{opt.label}</span>
+                                                                                                <span className="text-[7px] text-gray-400 font-bold uppercase tracking-widest mt-1 opacity-70 truncate">{opt.desc}</span>
+                                                                                            </div>
+                                                                                        </button>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
-                                                                    <span className={`material-symbols-outlined text-gray-300 text-[14px] transition-all ${openDropdown?.actionId === action.id && openDropdown?.type === 'effect' ? 'rotate-180 text-primary' : ''}`}>keyboard_arrow_down</span>
-                                                                </div>
+                                                                );
+                                                            })()}
 
-                                                                {/* Dropdown Menu matching Visual Effects + design */}
-                                                                {openDropdown?.actionId === action.id && openDropdown?.type === 'effect' && (
-                                                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-md overflow-hidden">
-                                                                        <div className="flex flex-col max-h-[220px] overflow-y-auto custom-scrollbar">
-                                                                            {visualEffects.map(fx => (
-                                                                                <button 
-                                                                                    key={fx.id}
-                                                                                    onClick={() => {
-                                                                                        const sc = stages.find(s => s.id === selectedStageId);
-                                                                                        if (!sc) return;
-                                                                                        const nextActions = [...(sc.actions || [])];
-                                                                                        nextActions[idx] = { ...action, actionType: fx.id, config: {} };
-                                                                                        onUpdateStage(sc.id, { actions: nextActions });
-                                                                                        setOpenDropdown(null);
-                                                                                    }}
-                                                                                    className={`w-full px-3 py-2 flex items-center gap-2.5 hover:bg-primary/[0.04] transition-colors text-left ${action.actionType === fx.id ? 'bg-primary/[0.08]' : ''}`}
-                                                                                >
-                                                                                    <span className={`material-symbols-outlined text-[14px] ${action.actionType === fx.id ? 'text-primary' : 'text-gray-400'}`}>{fx.icon}</span>
-                                                                                    <div className="flex flex-col min-w-0">
-                                                                                        <span className={`text-[9px] font-black uppercase tracking-tight leading-none truncate ${action.actionType === fx.id ? 'text-primary' : 'text-gray-700'}`}>{fx.label}</span>
-                                                                                        <span className="text-[7px] text-gray-400 font-bold uppercase tracking-widest mt-1 opacity-70 truncate">{fx.description}</span>
-                                                                                    </div>
-                                                                                </button>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-
-                                                            {/* Action Settings Panel */}
-                                                            {action.actionType !== 'none' && (
+                                                            {/* Action Config Panel */}
+                                                            {action.actionType && (
                                                                 <div className="mt-2 flex flex-col gap-3 p-3 bg-gray-50/50 rounded-xl border border-gray-100/50">
                                                                     {(() => {
-                                                                        const type = action.actionType;
+                                                                        const type = action.actionType as LandingPageActionType;
                                                                         const config = action.config || {};
-                                                                        
+
                                                                         const updateConfig = (updates: any) => {
                                                                             const sc = stages.find(s => s.id === selectedStageId);
                                                                             if (!sc) return;
                                                                             const nextActions = [...(sc.actions || [])];
                                                                             nextActions[idx] = { ...action, config: { ...config, ...updates } };
-                                                                            onUpdateStage(sc.id, { actions: nextActions });
+                                                                            onUpdateStage(sc.id, { actions: nextActions as LandingPageAction[] });
                                                                         };
 
-                                                                        if (['dropShadow', 'innerShadow', 'textShadow'].includes(type)) {
-                                                                            return (
-                                                                                <div className="flex flex-col gap-3">
-                                                                                    <div className="grid grid-cols-2 gap-2">
-                                                                                        <div className="flex flex-col gap-1">
-                                                                                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest pl-1">Offset X</label>
-                                                                                            <input 
-                                                                                                type="number" 
-                                                                                                value={config.x ?? 0}
-                                                                                                onChange={(e) => updateConfig({ x: parseInt(e.target.value) || 0 })}
-                                                                                                onKeyDown={(e) => {
-                                                                                                    const delta = e.shiftKey ? 10 : 1;
-                                                                                                    if (e.key === 'ArrowUp') { e.preventDefault(); updateConfig({ x: (Number(config.x ?? 0)) + delta }); }
-                                                                                                    if (e.key === 'ArrowDown') { e.preventDefault(); updateConfig({ x: (Number(config.x ?? 0)) - delta }); }
-                                                                                                }}
-                                                                                                className="w-full h-8 px-2 bg-white border border-gray-100 rounded text-[10px] font-bold"
-                                                                                            />
-                                                                                        </div>
-                                                                                        <div className="flex flex-col gap-1">
-                                                                                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest pl-1">Offset Y</label>
-                                                                                            <input 
-                                                                                                type="number" 
-                                                                                                value={config.y ?? 4}
-                                                                                                onChange={(e) => updateConfig({ y: parseInt(e.target.value) || 0 })}
-                                                                                                onKeyDown={(e) => {
-                                                                                                    const delta = e.shiftKey ? 10 : 1;
-                                                                                                    if (e.key === 'ArrowUp') { e.preventDefault(); updateConfig({ y: (Number(config.y ?? 4)) + delta }); }
-                                                                                                    if (e.key === 'ArrowDown') { e.preventDefault(); updateConfig({ y: (Number(config.y ?? 4)) - delta }); }
-                                                                                                }}
-                                                                                                className="w-full h-8 px-2 bg-white border border-gray-100 rounded text-[10px] font-bold"
-                                                                                            />
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <div className="flex flex-col gap-1">
-                                                                                        <div className="flex items-center justify-between pl-1">
-                                                                                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Blur Radius</label>
-                                                                                            <span className="text-[9px] font-black text-primary">{config.blur ?? 10}px</span>
-                                                                                        </div>
-                                                                                        <input 
-                                                                                            type="range" min="0" max="50"
-                                                                                            value={config.blur ?? 10}
-                                                                                            onChange={(e) => updateConfig({ blur: parseInt(e.target.value) })}
-                                                                                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                                                                                        />
-                                                                                    </div>
-                                                                                    <div className="flex items-center gap-3">
-                                                                                        <ColorPicker 
-                                                                                            variant="minimal"
-                                                                                            value={config.color || '#000000'}
-                                                                                            onChange={(val) => updateConfig({ color: val })}
-                                                                                            swatches={documentColors}
-                                                                                        />
-                                                                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Shadow Color</span>
-                                                                                    </div>
-                                                                                </div>
-                                                                            );
-                                                                        }
-
-                                                                        if (type === 'position') {
-                                                                            return (
-                                                                                <div className="flex flex-col gap-3">
-                                                                                    <div className="grid grid-cols-2 gap-2">
-                                                                                        <div className="flex flex-col gap-1">
-                                                                                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest pl-1">Move X</label>
-                                                                                            <input 
-                                                                                                type="number" 
-                                                                                                value={config.x ?? 0}
-                                                                                                onChange={(e) => updateConfig({ x: parseInt(e.target.value) || 0 })}
-                                                                                                onKeyDown={(e) => {
-                                                                                                    const delta = e.shiftKey ? 10 : 1;
-                                                                                                    if (e.key === 'ArrowUp') { e.preventDefault(); updateConfig({ x: (Number(config.x ?? 0)) + delta }); }
-                                                                                                    if (e.key === 'ArrowDown') { e.preventDefault(); updateConfig({ x: (Number(config.x ?? 0)) - delta }); }
-                                                                                                }}
-                                                                                                className="w-full h-8 px-2 bg-white border border-gray-100 rounded text-[10px] font-bold"
-                                                                                            />
-                                                                                        </div>
-                                                                                        <div className="flex flex-col gap-1">
-                                                                                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest pl-1">Move Y</label>
-                                                                                            <input 
-                                                                                                type="number" 
-                                                                                                value={config.y ?? 0}
-                                                                                                onChange={(e) => updateConfig({ y: parseInt(e.target.value) || 0 })}
-                                                                                                onKeyDown={(e) => {
-                                                                                                    const delta = e.shiftKey ? 10 : 1;
-                                                                                                    if (e.key === 'ArrowUp') { e.preventDefault(); updateConfig({ y: (Number(config.y ?? 0)) + delta }); }
-                                                                                                    if (e.key === 'ArrowDown') { e.preventDefault(); updateConfig({ y: (Number(config.y ?? 0)) - delta }); }
-                                                                                                }}
-                                                                                                className="w-full h-8 px-2 bg-white border border-gray-100 rounded text-[10px] font-bold"
-                                                                                            />
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            );
-                                                                        }
-
-                                                                        if (type !== 'none' && type !== 'position') {
-                                                                            const min = 0;
-                                                                            const max = type === 'hueRotate' ? 360 : (['blur', 'spread'].includes(type) ? 50 : 200);
-                                                                            const defaultValue = ['brightness', 'contrast', 'saturate'].includes(type) ? 100 : 0;
-                                                                            const unit = type === 'blur' ? 'px' : type === 'hueRotate' ? '°' : '%';
-                                                                            
+                                                                        if (type === 'navigate-url') {
                                                                             return (
                                                                                 <div className="flex flex-col gap-2">
-                                                                                    <div className="flex items-center justify-between pl-1">
-                                                                                        <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Effect Intensity</label>
-                                                                                        <span className="text-[9px] font-black text-primary">{(config.value !== undefined ? config.value : defaultValue)}{unit}</span>
-                                                                                    </div>
-                                                                                    <input 
-                                                                                        type="range" min={min} max={max}
-                                                                                        value={config.value !== undefined ? config.value : defaultValue}
-                                                                                        onChange={(e) => updateConfig({ value: parseInt(e.target.value) })}
-                                                                                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                                                                                    <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest pl-1">URL</label>
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        placeholder="https://example.com"
+                                                                                        value={config.url || ''}
+                                                                                        onChange={e => updateConfig({ url: e.target.value })}
+                                                                                        className="w-full h-8 px-2 bg-white border border-gray-100 rounded text-[10px] font-bold"
                                                                                     />
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <input type="checkbox" id={`newtab-${action.id}`} checked={!!config.openInNewTab} onChange={e => updateConfig({ openInNewTab: e.target.checked })} className="accent-primary" />
+                                                                                        <label htmlFor={`newtab-${action.id}`} className="text-[9px] font-bold text-gray-500">Open in new tab</label>
+                                                                                    </div>
                                                                                 </div>
                                                                             );
                                                                         }
+
+                                                                        if (['play-animation', 'stop-animation', 'toggle-animation'].includes(type)) {
+                                                                            return (
+                                                                                <div className="flex flex-col gap-2">
+                                                                                    <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest pl-1">Animation Phase</label>
+                                                                                    <div className="flex gap-1 flex-wrap">
+                                                                                        {(['entry', 'main', 'exit', 'all'] as const).map(phase => (
+                                                                                            <button
+                                                                                                key={phase}
+                                                                                                onClick={() => updateConfig({ animationPhase: phase })}
+                                                                                                className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase border transition-all ${config.animationPhase === phase ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-gray-400 border-gray-200 hover:border-primary/40'}`}
+                                                                                            >
+                                                                                                {phase}
+                                                                                            </button>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        }
+
                                                                         return null;
                                                                     })()}
                                                                 </div>
@@ -2818,7 +2754,133 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                             </button>
                         </div>
                     </div>
+
+                    {/* ── Playback Controls ──────────────────────────── */}
+                    {selectedLayers.length > 0 && (() => {
+                        const fl = selectedLayers[0];
+                        return (
+                            <div className="mt-1 pt-3 border-t border-gray-100 flex flex-col gap-2.5">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Playback</span>
+
+                                {/* Auto-Play toggle */}
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold text-gray-700">Auto-Play</span>
+                                    <button
+                                        className={`relative w-9 h-5 rounded-full transition-colors ${fl.animationAutoPlay ? 'bg-primary' : 'bg-gray-200'}`}
+                                        onClick={() => onUpdateLayers(selectedLayerIds, { animationAutoPlay: !fl.animationAutoPlay })}
+                                    >
+                                        <div className={`absolute top-0.5 left-0.5 size-4 bg-white rounded-full shadow transition-transform ${fl.animationAutoPlay ? 'translate-x-4' : ''}`} />
+                                    </button>
+                                </div>
+
+                                {/* Loop Count */}
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] font-bold text-gray-700">Loop Count</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <input
+                                            type="number" min={0} step={1}
+                                            value={fl.animationLoopCount ?? 1}
+                                            onChange={e => onUpdateLayers(selectedLayerIds, { animationLoopCount: Math.max(0, parseInt(e.target.value) || 0) })}
+                                            className="w-14 text-[10px] text-right border border-gray-200 rounded-lg px-2 py-1 focus:border-primary/50 outline-none"
+                                        />
+                                        <span className="text-[9px] text-gray-400">0=∞</span>
+                                    </div>
+                                </div>
+
+                                {/* Stop At */}
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] font-bold text-gray-700">Stop At</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <input
+                                            type="number" min={0} step={0.1}
+                                            placeholder="end"
+                                            value={fl.animationStopAt ?? ''}
+                                            onChange={e => onUpdateLayers(selectedLayerIds, { animationStopAt: e.target.value === '' ? null : parseFloat(e.target.value) })}
+                                            className="w-14 text-[10px] text-right border border-gray-200 rounded-lg px-2 py-1 focus:border-primary/50 outline-none"
+                                        />
+                                        <span className="text-[9px] text-gray-400">sec</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
+
+                {/* ── Interactions ──────────────────────────────────── */}
+                {selectedLayers.length > 0 && (() => {
+                    const fl = selectedLayers[0];
+                    const actions: InteractionAction[] = fl.interactionActions || [];
+
+                    const updateActions = (updated: InteractionAction[]) => {
+                        onUpdateLayers(selectedLayerIds, { interactionActions: updated });
+                    };
+
+                    return (
+                        <div className="flex flex-col gap-3 p-4 bg-gray-50/50 border border-gray-100 rounded-2xl mb-2 hover:border-primary/20 transition-all">
+                            <div className="flex items-center justify-between">
+                                <label className="text-[10px] text-gray-900 font-black uppercase tracking-widest flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-[16px] text-primary">touch_app</span>
+                                    Interactions
+                                </label>
+                                <button
+                                    onClick={() => {
+                                        const newAction: InteractionAction = {
+                                            id: Math.random().toString(36).slice(2, 9),
+                                            event: 'click',
+                                            action: 'play-all',
+                                        };
+                                        updateActions([...actions, newAction]);
+                                    }}
+                                    className="size-7 rounded-lg bg-primary text-white flex items-center justify-center hover:opacity-90 active:scale-95 transition-all shadow shadow-primary/20"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">add</span>
+                                </button>
+                            </div>
+
+                            {actions.length === 0 ? (
+                                <p className="text-[9px] text-gray-400 text-center py-2">No interactions. Click + to add one.</p>
+                            ) : actions.map((ia, idx) => (
+                                <div key={ia.id} className="flex items-center gap-1.5 p-2 bg-white border border-gray-100 rounded-xl">
+                                    <select
+                                        value={ia.event}
+                                        onChange={e => updateActions(actions.map((x, i) => i === idx ? { ...x, event: e.target.value as AnimationTriggerEvent } : x))}
+                                        className="flex-1 text-[9px] border border-gray-200 rounded-lg px-1.5 py-1 focus:border-primary/50 outline-none bg-white"
+                                    >
+                                        <option value="click">Click / Tap</option>
+                                        <option value="hover">Mouse Over</option>
+                                        <option value="hoverEnd">Mouse Out</option>
+                                        <option value="touchStart">Touch Start</option>
+                                        <option value="touchEnd">Touch End</option>
+                                        <option value="focus">Focus</option>
+                                        <option value="blur">Blur</option>
+                                        <option value="scroll-into-view">Scroll Into View</option>
+                                    </select>
+                                    <span className="text-[9px] text-gray-300 shrink-0">→</span>
+                                    <select
+                                        value={ia.action}
+                                        onChange={e => updateActions(actions.map((x, i) => i === idx ? { ...x, action: e.target.value as AnimationTriggerAction } : x))}
+                                        className="flex-1 text-[9px] border border-gray-200 rounded-lg px-1.5 py-1 focus:border-primary/50 outline-none bg-white"
+                                    >
+                                        <option value="play-entry">Play Entry</option>
+                                        <option value="play-main">Play Loop</option>
+                                        <option value="play-exit">Play Exit</option>
+                                        <option value="play-all">Play Full</option>
+                                        <option value="stop">Stop</option>
+                                        <option value="pause">Pause</option>
+                                        <option value="resume">Resume</option>
+                                        <option value="reset">Reset</option>
+                                    </select>
+                                    <button
+                                        onClick={() => updateActions(actions.filter((_, i) => i !== idx))}
+                                        className="size-6 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors flex items-center justify-center shrink-0"
+                                    >
+                                        <span className="material-symbols-outlined text-[14px]">close</span>
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                })()}
 
                 {/* Media Settings Section (Source + Fill) */}
                 {selectedLayers.length > 0 && selectedLayers.every(l => ['image', 'media'].includes(l.type)) && (() => {

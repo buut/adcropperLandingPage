@@ -131,8 +131,8 @@ function getOperationsTextForStage(stage: Stage): string {
   } else {
     actions.forEach((a) => {
       const sourceName = a.triggerSourceId === 'stage' ? 'Stage' : (findLayerName(stage.layers, a.triggerSourceId) || a.triggerSourceId);
-      const targetName = findLayerName(stage.layers, a.triggerTargetId) || a.triggerTargetId;
-      const event = (a.eventType || 'trigger').toLowerCase();
+      const targetName = findLayerName(stage.layers, a.targetId) || a.targetId;
+      const event = (a.triggerEvent || 'trigger').toLowerCase();
       lines.push(`  - On ${event} on "${sourceName}": apply ${a.actionType} to "${targetName}".`);
     });
   }

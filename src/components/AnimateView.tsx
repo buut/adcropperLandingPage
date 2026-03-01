@@ -115,28 +115,17 @@ const StagePreviewWrapper: React.FC<{
                     id={`stage-root-${stage.id}`}
                     className="relative bg-white shadow-2xl flex-shrink-0 transition-transform duration-300 ease-in-out"
                     style={(() => {
-                        const activeStageActions = (stage.actions || []).filter(a => a.triggerTargetId === 'stage' && actionStates[a.id]);
-                        let stx = 0, sty = 0;
-                        activeStageActions.forEach(a => {
-                            if (a.actionType === 'position') {
-                                stx += Number(a.config?.x) || 0;
-                                sty += Number(a.config?.y) || 0;
-                            }
-                        });
-                        const stageTransform = (stx !== 0 || sty !== 0) ? `translate(${stx}px, ${sty}px)` : '';
-
                         return {
                             width: stage.width * zoom,
                             height: stage.height * zoom,
                             background: stage.bgType === 'none' || stage.backgroundColor === 'transparent'
                                 ? 'transparent'
-                                : stage.bgType === 'radial' 
-                                ? `radial-gradient(circle, ${stage.backgroundColor}, ${stage.backgroundColor2})` 
-                                : stage.bgType === 'linear' 
-                                ? `linear-gradient(180deg, ${stage.backgroundColor}, ${stage.backgroundColor2})` 
+                                : stage.bgType === 'radial'
+                                ? `radial-gradient(circle, ${stage.backgroundColor}, ${stage.backgroundColor2})`
+                                : stage.bgType === 'linear'
+                                ? `linear-gradient(180deg, ${stage.backgroundColor}, ${stage.backgroundColor2})`
                                 : stage.backgroundColor || '#ffffff',
                             overflow: stage.overflow || 'hidden',
-                            transform: stageTransform || undefined,
                             transformStyle: 'preserve-3d',
                             perspective: '2000px',
                             perspectiveOrigin: '50% 50%',
@@ -146,7 +135,7 @@ const StagePreviewWrapper: React.FC<{
                     onClick={(e) => {
                         if (!isInteractive) return;
                         stage.actions?.forEach(a => {
-                            if (a.triggerSourceId === 'stage' && (a.eventType === 'click' || !a.eventType)) {
+                            if (a.triggerSourceId === 'stage' && (a.triggerEvent === 'click' || !a.triggerEvent)) {
                                 onTriggerAction?.(a.id, !actionStates[a.id]);
                             }
                         });
@@ -155,9 +144,9 @@ const StagePreviewWrapper: React.FC<{
                         if (!isInteractive) return;
                         stage.actions?.forEach(a => {
                             if (a.triggerSourceId === 'stage') {
-                                if (a.eventType === 'mouseover') {
+                                if (a.triggerEvent === 'hover') {
                                     onTriggerAction?.(a.id, true);
-                                } else if (a.eventType === 'mouseout') {
+                                } else if (a.triggerEvent === 'hoverEnd') {
                                     onTriggerAction?.(a.id, false);
                                 }
                             }
@@ -167,9 +156,9 @@ const StagePreviewWrapper: React.FC<{
                         if (!isInteractive) return;
                         stage.actions?.forEach(a => {
                             if (a.triggerSourceId === 'stage') {
-                                if (a.eventType === 'mouseover') {
+                                if (a.triggerEvent === 'hover') {
                                     onTriggerAction?.(a.id, false);
-                                } else if (a.eventType === 'mouseout') {
+                                } else if (a.triggerEvent === 'hoverEnd') {
                                     onTriggerAction?.(a.id, true);
                                 }
                             }

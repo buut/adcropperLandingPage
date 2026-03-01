@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { applyRichTextFormat } from '../utils/richText';
 import { getAnimationStyles, getInterpolatedLayerStyles } from '../utils/animations';
-import { Layer, FontData } from '../App';
+import { Layer, FontData, AnimationTriggerAction } from '../App';
 import FontSelector from './FontSelector';
 import WeightSelector from './WeightSelector';
 import ColorPicker from './ColorPicker';
@@ -191,6 +191,7 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
     const hasFocused = React.useRef(false);
     const contentRef = React.useRef<HTMLDivElement>(null);
     const videoRef = React.useRef<HTMLVideoElement>(null);
+    const [interactionAnim, setInteractionAnim] = React.useState<{ active: boolean; phase: string | null } | null>(null);
     const [videoPlayState, setVideoPlayState] = React.useState(false);
     const [videoMuted, setVideoMuted] = React.useState(true);
     const [videoVolume, setVideoVolume] = React.useState(1);
@@ -1439,28 +1440,63 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
         }
     }, [meta.label, sizingLayoutType, zoom, layer.width, layer.height, onUpdateLayers]);
 
+    const handleInteractionAction = (action: AnimationTriggerAction) => {
+        switch (action) {
+            case 'play-entry': setInteractionAnim({ active: true, phase: 'entry' }); break;
+            case 'play-main':  setInteractionAnim({ active: true, phase: 'main' }); break;
+            case 'play-exit':  setInteractionAnim({ active: true, phase: 'exit' }); break;
+            case 'play-all':   setInteractionAnim({ active: true, phase: 'entry' }); break;
+            case 'stop':
+            case 'reset':      setInteractionAnim({ active: false, phase: null }); break;
+            case 'pause':      setInteractionAnim(prev => prev ? { ...prev, active: false } : null); break;
+            case 'resume':     setInteractionAnim(prev => prev ? { ...prev, active: true } : null); break;
+        }
+    };
+
     const handleActionTrigger = (type: 'click' | 'mouseenter' | 'mouseleave') => {
+        // Fire layer interactionActions (per-layer animation triggers)
+        layer.interactionActions?.forEach(ia => {
+            const matches =
+                (type === 'click'      && ia.event === 'click') ||
+                (type === 'mouseenter' && ia.event === 'hover') ||
+                (type === 'mouseleave' && ia.event === 'hoverEnd');
+            if (matches && (isPreviewMode || isInteractive)) handleInteractionAction(ia.action as AnimationTriggerAction);
+        });
+
         if (!isInteractive) return;
-        // console.log(`[ActionTrigger] type=${type}, id=${layer.id}`);
+        // Fire stage-level LandingPageActions
         stageActions.forEach(a => {
             if (a.triggerSourceId === layer.id) {
-                const eventType = a.eventType || 'click';
-                // console.log(`[ActionTrigger] checking action=${a.id} source=${a.triggerSourceId} eventType=${eventType}`);
-
-                if (type === 'click' && eventType === 'click') {
+                // Legacy StageAction support (eventType)
+                const eventType = a.eventType || a.triggerEvent || 'click';
+                if (type === 'click' && (eventType === 'click')) {
                     onTriggerAction?.(a.id, !actionStates[a.id]);
-                } else if (type === 'mouseenter' && eventType === 'mouseover') {
+                } else if (type === 'mouseenter' && (eventType === 'mouseover' || eventType === 'hover')) {
                     onTriggerAction?.(a.id, true);
-                } else if (type === 'mouseleave' && eventType === 'mouseover') {
+                } else if (type === 'mouseleave' && (eventType === 'mouseover' || eventType === 'hover')) {
                     onTriggerAction?.(a.id, false);
-                } else if (type === 'mouseenter' && eventType === 'mouseout') {
+                } else if (type === 'mouseenter' && (eventType === 'mouseout' || eventType === 'hoverEnd')) {
                     onTriggerAction?.(a.id, false);
-                } else if (type === 'mouseleave' && eventType === 'mouseout') {
+                } else if (type === 'mouseleave' && (eventType === 'mouseout' || eventType === 'hoverEnd')) {
                     onTriggerAction?.(a.id, true);
                 }
             }
         });
     };
+
+    // IntersectionObserver for scroll-into-view trigger
+    React.useEffect(() => {
+        const scrollTrigger = layer.interactionActions?.find(a => a.event === 'scroll-into-view');
+        if (!scrollTrigger || (!isPreviewMode && !isInteractive)) return;
+        const el = document.getElementById(layer.id);
+        if (!el) return;
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting) handleInteractionAction(scrollTrigger.action as AnimationTriggerAction);
+        }, { threshold: 0.15 });
+        observer.observe(el);
+        return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [layer.interactionActions, layer.id, isPreviewMode, isInteractive]);
 
     const handleClick = (e: React.MouseEvent) => {
         if (e.button !== 0) return; // Only left click for layer selection
@@ -1643,9 +1679,15 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
         animationDuration: '1s',
         animationTimingFunction: 'linear',
         animationFillMode: 'forwards',
-        animationDelay: rawAnim ? `-${progress}s` : '0s',
-        animationIterationCount: 1,
-        animationPlayState: 'paused',
+        animationDelay: interactionAnim?.active
+            ? '0s'
+            : (!isPreviewMode && rawAnim ? `-${progress}s` : '0s'),
+        animationIterationCount: (interactionAnim?.active || (isPreviewMode && layer.animationAutoPlay === true))
+            ? (layer.animationLoopCount === 0 ? 'infinite' : (layer.animationLoopCount ?? 1))
+            : 1,
+        animationPlayState: (interactionAnim?.active || (isPreviewMode && layer.animationAutoPlay === true))
+            ? 'running'
+            : 'paused',
         // Critical: Ensure the wrapper (which might have a CSS animation) uses the correct origin
         transformOrigin: (effectiveStyles as any)?.transformOrigin,
         transformStyle: 'preserve-3d',
@@ -1710,12 +1752,20 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                         handleActionTrigger('mouseleave');
                         onHover?.(null);
                     }}
-                onMouseDown={(e) => { 
+                    onTouchStart={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchStart');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                    onTouchEnd={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchEnd');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                onMouseDown={(e) => {
                     if (isEditing) {
                         e.stopPropagation();
                         return;
                     }
-                    if (!isTextToolActive) e.stopPropagation(); 
+                    if (!isTextToolActive) e.stopPropagation();
                     onMouseDown?.(e, layer.id);
                 }}
                     onContextMenu={(e) => {
@@ -1899,12 +1949,20 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                         handleActionTrigger('mouseleave');
                         onHover?.(null);
                     }}
-                onMouseDown={(e) => { 
+                    onTouchStart={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchStart');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                    onTouchEnd={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchEnd');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                onMouseDown={(e) => {
                     if (isEditing) {
                         e.stopPropagation();
                         return;
                     }
-                    if (!isTextToolActive) e.stopPropagation(); 
+                    if (!isTextToolActive) e.stopPropagation();
                     onMouseDown?.(e, layer.id);
                 }}
                     onContextMenu={(e) => {
@@ -2171,12 +2229,20 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                         handleActionTrigger('mouseleave');
                         onHover?.(null);
                     }}
-                onMouseDown={(e) => { 
+                    onTouchStart={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchStart');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                    onTouchEnd={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchEnd');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                onMouseDown={(e) => {
                     if (isEditing) {
                         e.stopPropagation();
                         return;
                     }
-                    if (!isTextToolActive) e.stopPropagation(); 
+                    if (!isTextToolActive) e.stopPropagation();
                     onMouseDown?.(e, layer.id);
                 }}
                     onContextMenu={(e) => {
@@ -2284,12 +2350,20 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                         handleActionTrigger('mouseleave');
                         onHover?.(null);
                     }}
-                onMouseDown={(e) => { 
+                    onTouchStart={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchStart');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                    onTouchEnd={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchEnd');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                onMouseDown={(e) => {
                     if (isEditing) {
                         e.stopPropagation();
                         return;
                     }
-                    if (!isTextToolActive) e.stopPropagation(); 
+                    if (!isTextToolActive) e.stopPropagation();
                     onMouseDown?.(e, layer.id);
                 }}
                     onContextMenu={(e) => {
@@ -2331,12 +2405,20 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                         handleActionTrigger('mouseleave');
                         onHover?.(null);
                     }}
-                onMouseDown={(e) => { 
+                    onTouchStart={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchStart');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                    onTouchEnd={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchEnd');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                onMouseDown={(e) => {
                     if (isEditing) {
                         e.stopPropagation();
                         return;
                     }
-                    if (!isTextToolActive) e.stopPropagation(); 
+                    if (!isTextToolActive) e.stopPropagation();
                     onMouseDown?.(e, layer.id);
                 }}
                     onContextMenu={(e) => {
@@ -2784,12 +2866,20 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                         handleActionTrigger('mouseleave');
                         onHover?.(null);
                     }}
-                onMouseDown={(e) => { 
+                    onTouchStart={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchStart');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                    onTouchEnd={() => {
+                        const t = layer.interactionActions?.find(a => a.event === 'touchEnd');
+                        if (t && (isPreviewMode || isInteractive)) handleInteractionAction(t.action as AnimationTriggerAction);
+                    }}
+                onMouseDown={(e) => {
                     if (isEditing) {
                         e.stopPropagation();
                         return;
                     }
-                    if (!isTextToolActive) e.stopPropagation(); 
+                    if (!isTextToolActive) e.stopPropagation();
                     onMouseDown?.(e, layer.id);
                 }}
                     onContextMenu={(e) => {

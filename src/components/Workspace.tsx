@@ -3,7 +3,7 @@ import StageContainer from './StageContainer';
 import TransformController from './TransformController';
 import GradientHandlesOverlay from './GradientHandlesOverlay';
 import ContextMenu from './ContextMenu';
-import { Stage, FontData, GuideLine, ChatMessage } from '../App';
+import { Stage, FontData, GuideLine, ChatMessage, LandingPageAction } from '../App';
 import LayerPreview from './LayerPreview';
 import { getInterpolatedLayerStyles, project3d, parseOrigin } from '../utils/animations';
 import { collectDescendantScaleUpdates, calculateLayerScaleUpdates } from '../utils/groupScaling';
@@ -42,6 +42,7 @@ interface WorkspaceProps {
     previewState?: 'default' | 'hover' | 'active';
     actionStates?: Record<string, boolean>;
     onTriggerAction?: (actionId: string, isActive: boolean) => void;
+    onLandingPageAction?: (action: LandingPageAction) => void;
     onCopyLayer?: (layerId: string) => void;
     onPasteLayer?: (stageId: string, x?: number, y?: number) => void;
     hasLayerClipboard?: boolean;
@@ -125,6 +126,7 @@ const Workspace = React.forwardRef<WorkspaceHandle, WorkspaceProps>(({
     previewState = 'default',
     actionStates = {},
     onTriggerAction,
+    onLandingPageAction,
     onDuplicateLayers,
     onCopyLayer,
     onPasteLayer,
@@ -2169,16 +2171,6 @@ const Workspace = React.forwardRef<WorkspaceHandle, WorkspaceProps>(({
                                 id={`stage-root-${stage.id}`}
                                 className="absolute transition-transform duration-300 ease-in-out"
                                 style={(() => {
-                                    const activeStageActions = (stage.actions || []).filter(a => a.triggerTargetId === 'stage' && actionStates[a.id]);
-                                    let stx = 0, sty = 0;
-                                    activeStageActions.forEach(a => {
-                                        if (a.actionType === 'position') {
-                                            stx += Number(a.config?.x) || 0;
-                                            sty += Number(a.config?.y) || 0;
-                                        }
-                                    });
-                                    const stageTransform = (stx !== 0 || sty !== 0) ? `translate(${stx}px, ${sty}px)` : '';
-
                                     return {
                                         left: stage.x + 1000, // Account for padding
                                         top: stage.y + 1000,
@@ -2190,7 +2182,6 @@ const Workspace = React.forwardRef<WorkspaceHandle, WorkspaceProps>(({
                                         transformStyle: 'preserve-3d',
                                         pointerEvents: 'none', // Wrapper shouldn't block, children will handle events
                                         contain: 'layout size',
-                                        transform: stageTransform || undefined
                                     };
                                 })()}
                             >
@@ -2219,9 +2210,11 @@ const Workspace = React.forwardRef<WorkspaceHandle, WorkspaceProps>(({
                                     actions={stage.actions}
                                     actionStates={actionStates}
                                     onTriggerAction={onTriggerAction}
+                                    onLandingPageAction={onLandingPageAction}
                                     isPreviewMode={isPreviewMode}
                                     isInteractive={isPreviewMode || activeSidebarTab === 'animate'}
                                     overflow={stage.overflow}
+                                    breakpoint={stage.breakpoint}
                                     onUpdateName={(newName) => onUpdateStageName?.(stage.id, newName)}
                                     onDrop={(source, x, y, assetType, meta) => {
                                         onDropOnWorkspace(source, assetType, meta, x, y, stage.id);

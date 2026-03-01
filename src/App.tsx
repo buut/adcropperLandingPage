@@ -116,6 +116,11 @@ export interface Layer {
     main: { start: number; duration: number; name?: string; repeat?: number; easing?: string };
     exit: { start: number; duration: number; name?: string; easing?: string };
   };
+  // Landing page interaction / playback controls
+  animationAutoPlay?: boolean;
+  animationLoopCount?: number;
+  animationStopAt?: number | null;
+  interactionActions?: InteractionAction[];
 }
 
 export interface TimelineMarker {
@@ -132,6 +137,70 @@ export interface StageAction {
   actionType: string; // effect name from interactiveEffects
   eventType?: 'click' | 'mouseover' | 'mouseout';
   config?: any;
+}
+
+// ── Landing Page types ──────────────────────────────────────────────────────
+
+export type BreakpointName = 'xlarge' | 'large' | 'medium' | 'small' | 'xsmall';
+
+export const BREAKPOINT_PRESETS: Record<BreakpointName, { width: number; height: number; label: string }> = {
+  xlarge: { width: 1920, height: 1080, label: 'XL — 1920px  Desktop Wide' },
+  large:  { width: 1280, height: 800,  label: 'LG — 1280px  Desktop' },
+  medium: { width: 1024, height: 768,  label: 'MD — 1024px  Tablet Landscape' },
+  small:  { width: 768,  height: 1024, label: 'SM — 768px   Tablet Portrait' },
+  xsmall: { width: 390,  height: 844,  label: 'XS — 390px   Mobile' },
+};
+
+export const BREAKPOINT_COLORS: Record<BreakpointName, string> = {
+  xlarge: '#7c3aed',
+  large:  '#2563eb',
+  medium: '#059669',
+  small:  '#d97706',
+  xsmall: '#dc2626',
+};
+
+export const BREAKPOINT_ABBR: Record<BreakpointName, string> = {
+  xlarge: 'XL',
+  large:  'LG',
+  medium: 'MD',
+  small:  'SM',
+  xsmall: 'XS',
+};
+
+export type LandingPageTrigger =
+  | 'click' | 'hover' | 'hoverEnd' | 'touchStart' | 'touchEnd'
+  | 'scroll-into-view' | 'scroll-out-view';
+
+export type LandingPageActionType =
+  | 'scroll-to-section' | 'open-menu' | 'close-menu' | 'toggle-layer'
+  | 'navigate-url' | 'play-animation' | 'stop-animation' | 'toggle-animation';
+
+export interface LandingPageAction {
+  id: string;
+  triggerSourceId: string;
+  triggerEvent: LandingPageTrigger;
+  actionType: LandingPageActionType;
+  targetId: string;
+  config?: {
+    url?: string;
+    openInNewTab?: boolean;
+    sectionId?: string;
+    animationPhase?: 'entry' | 'main' | 'exit' | 'all';
+  };
+}
+
+export type AnimationTriggerEvent =
+  | 'click' | 'hover' | 'hoverEnd' | 'touchStart' | 'touchEnd'
+  | 'focus' | 'blur' | 'scroll-into-view';
+
+export type AnimationTriggerAction =
+  | 'play-entry' | 'play-main' | 'play-exit' | 'play-all'
+  | 'stop' | 'pause' | 'resume' | 'reset';
+
+export interface InteractionAction {
+  id: string;
+  event: AnimationTriggerEvent;
+  action: AnimationTriggerAction;
 }
 
 export interface GuideLine {
@@ -178,10 +247,12 @@ export interface Stage {
     stopAt: number;
     loopElements: string[];
   };
-  actions?: StageAction[];
+  actions?: LandingPageAction[];
   sourceStageId?: string;
   overflow?: 'hidden' | 'visible';
   visible?: boolean;
+  breakpoint?: BreakpointName;
+  autoPlay?: boolean;
   gradientCenterX?: number;
   gradientCenterY?: number;
   gradientAngle?: number;
@@ -939,26 +1010,28 @@ const App: React.FC = () => {
     setActionStates(prev => ({ ...prev, [actionId]: isActive }));
   };
 
-  const handleAddStages = (newStages: { name: string; width: number; height: number }[]) => {
+  const handleAddStages = (newStages: { name: string; width: number; height: number; breakpoint?: BreakpointName }[]) => {
     pushToHistory();
-    
+
     // We pre-calculate everything to avoid issues with functional updates + broadcasting
     let currentMaxX = stages.length > 0 ? Math.max(...stages.map(s => Number(s.x + s.width) || 0)) : 0;
     const addedStages: Stage[] = [];
 
     newStages.forEach((ns) => {
       const stageId = generateShortId('stage');
-      const stage: Stage = { 
-        ...ns, 
-        id: stageId, 
+      const stage: Stage = {
+        ...ns,
+        id: stageId,
         x: currentMaxX + 100,
         y: 100,
-        layers: [], 
-        duration: 10, 
-        loopCount: -1, 
+        layers: [],
+        duration: 10,
+        loopCount: 1,
+        autoPlay: false,
         feedLoopCount: -1,
         actions: [],
-        overflow: 'hidden'
+        overflow: 'hidden',
+        breakpoint: ns.breakpoint,
       };
       addedStages.push(stage);
       currentMaxX += stage.width + 100;
@@ -991,6 +1064,48 @@ const App: React.FC = () => {
         newStages.forEach(stage => {
             broadcastAction({ type: 'STAGE_CREATE', stage });
         });
+    }
+  };
+
+  const handleLandingPageAction = (action: LandingPageAction) => {
+    if (!action) return;
+    switch (action.actionType) {
+      case 'navigate-url':
+        if (action.config?.url) {
+          window.open(action.config.url, action.config.openInNewTab ? '_blank' : '_self');
+        }
+        break;
+      case 'scroll-to-section': {
+        const targetStage = stages.find(s => s.id === action.targetId || s.name === action.config?.sectionId);
+        if (targetStage) setSelectedStageId(targetStage.id);
+        break;
+      }
+      case 'open-menu':
+        handleUpdateLayers([action.targetId], { hidden: false });
+        break;
+      case 'close-menu':
+        handleUpdateLayers([action.targetId], { hidden: true });
+        break;
+      case 'toggle-layer': {
+        const allLayersFlat = (layers: Layer[]): Layer[] =>
+          layers.flatMap(l => [l, ...(l.children ? allLayersFlat(l.children) : [])]);
+        const found = stages.flatMap(s => allLayersFlat(s.layers)).find(l => l.id === action.targetId);
+        if (found) handleUpdateLayers([action.targetId], { hidden: !found.hidden });
+        break;
+      }
+      case 'play-animation':
+      case 'stop-animation':
+      case 'toggle-animation': {
+        const tId = action.targetId;
+        const isPlay = action.actionType === 'play-animation';
+        const isStop = action.actionType === 'stop-animation';
+        setPreviewPlaybackStates(prev => {
+          const cur = prev[tId] || { isPlaying: false, currentTime: 0, loopsDone: 0 };
+          const next = isPlay ? true : isStop ? false : !cur.isPlaying;
+          return { ...prev, [tId]: { ...cur, isPlaying: next } };
+        });
+        break;
+      }
     }
   };
 
@@ -5440,6 +5555,7 @@ const handleArrangeStages = React.useCallback(() => {
                 previewState={previewState}
                 actionStates={actionStates}
                 onTriggerAction={handleTriggerAction}
+                onLandingPageAction={handleLandingPageAction}
                 onCopyLayer={handleCopyLayer}
                 onPasteLayer={handlePasteLayer}
                 hasLayerClipboard={!!layerClipboard}
