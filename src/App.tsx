@@ -811,6 +811,7 @@ const App: React.FC = () => {
   };
 
   const filteredStages = stages.filter(s => {
+    if (s.visible === false) return false;
     const matchesName = s.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSize = selectedSize === 'all' || `${s.width}x${s.height}` === selectedSize;
     return matchesName && matchesSize;
@@ -1236,11 +1237,12 @@ const App: React.FC = () => {
       y: 100,
       width: targetWidth,
       height: targetHeight,
-      layers: copyLayersRecursive(sourceStage.layers)
+      layers: copyLayersRecursive(sourceStage.layers),
+      visible: false
     };
 
     setStages(prev => [...prev, newStage]);
-    setSelectedStageId(newStage.id);
+    // setSelectedStageId(newStage.id); // Don't switch to hidden stage
     setSelectedLayerIds([]);
     
     broadcastAction({ type: 'STAGE_CREATE', stage: newStage });
@@ -5806,7 +5808,7 @@ const handleArrangeStages = React.useCallback(() => {
             </div>
 
               <Timeline
-                 stages={stages}
+                 stages={filteredStages}
                  selectedStageId={selectedStageId}
                  onRename={handleRenameLayer}
                  onReorder={handleReorderLayers}
@@ -5884,6 +5886,7 @@ const handleArrangeStages = React.useCallback(() => {
                 onClose={() => setDuplicateModalConfig({ isOpen: false, sourceStage: null })}
                 sourceStage={duplicateModalConfig.sourceStage}
                 onDuplicate={handleDuplicateStage}
+                stages={stages}
             />
 
             <SettingsPopup

@@ -360,6 +360,7 @@ const AnimateView: React.FC<Omit<AnimateViewProps, 'onZoomChange'>> = (props) =>
             `}</style>
             <div className={`flex gap-8 p-8 pb-32 mx-auto w-full ${isPreviewMode ? 'flex-row flex-wrap items-start justify-center' : 'flex-col max-w-[1400px]'}`}>
                 {stages.map((stage) => {
+                    if (stage.visible === false) return null;
                     const isCollapsed = collapsedStageIds.includes(stage.id);
                     const stageZoom = localStageZooms[stage.id] ?? globalZoom;
 

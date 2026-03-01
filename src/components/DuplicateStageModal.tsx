@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { Stage, BreakpointName, BREAKPOINT_PRESETS } from '../App';
 
 interface DuplicateStageModalProps {
     isOpen: boolean;
     onClose: () => void;
     onDuplicate: (stageId: string, name: string, width: number, height: number) => void;
     sourceStage: { id: string; name: string; width: number; height: number } | null;
+    stages: Stage[];
 }
 
 interface SelectedTarget {
@@ -15,27 +17,23 @@ interface SelectedTarget {
     isCustom?: boolean;
 }
 
-const DuplicateStageModal: React.FC<DuplicateStageModalProps> = ({ isOpen, onClose, onDuplicate, sourceStage }) => {
+const DuplicateStageModal: React.FC<DuplicateStageModalProps> = ({ isOpen, onClose, onDuplicate, sourceStage, stages }) => {
     const [namePrefix, setNamePrefix] = useState('');
     const [selectedTargets, setSelectedTargets] = useState<SelectedTarget[]>([]);
     const [customWidth, setCustomWidth] = useState<number>(1080);
     const [customHeight, setCustomHeight] = useState<number>(1080);
 
-    const standardPresets = [
-        { name: 'Medium Rectangle', width: 300, height: 250 },
-        { name: 'Leaderboard', width: 728, height: 90 },
-        { name: 'Half Page', width: 300, height: 600 },
-        { name: 'Large Mobile Banner', width: 320, height: 100 },
-        { name: 'Stories / Reels / TikTok', width: 1080, height: 1920 },
-        { name: 'Instagram Portrait', width: 1080, height: 1350 },
-        { name: 'Social Square', width: 1080, height: 1080 },
-        { name: 'Mobile Interstitial', width: 320, height: 480 },
-        { name: 'Expandable (Initial)', width: 300, height: 250 },
-        { name: 'Expandable (Expanded)', width: 600, height: 400 },
-        { name: 'Sticky / Anchor Banner', width: 320, height: 50 },
-        { name: 'YouTube Landscape', width: 1920, height: 1080 },
-        { name: 'Wide Skyscraper', width: 160, height: 600 },
-    ];
+    const BREAKPOINT_ORDER: BreakpointName[] = ['xlarge', 'large', 'medium', 'small', 'xsmall'];
+
+    const standardPresets = BREAKPOINT_ORDER.map(bp => {
+        const p = BREAKPOINT_PRESETS[bp];
+        return { name: p.label, width: p.width, height: p.height };
+    });
+
+    // Filter out presets that already exist in stages
+    const availablePresets = standardPresets.filter(p => {
+        return !stages.some(s => s.width === p.width && s.height === p.height);
+    });
 
     useEffect(() => {
         if (sourceStage) {
@@ -188,7 +186,7 @@ const DuplicateStageModal: React.FC<DuplicateStageModalProps> = ({ isOpen, onClo
                                         <button 
                                             type="button"
                                             onClick={() => {
-                                                const all = standardPresets.map(p => ({
+                                                const all = availablePresets.map(p => ({
                                                     id: `${p.name}-${p.width}x${p.height}`,
                                                     name: p.name,
                                                     width: p.width,
@@ -212,10 +210,10 @@ const DuplicateStageModal: React.FC<DuplicateStageModalProps> = ({ isOpen, onClo
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 overflow-y-auto pr-2" style={{ maxHeight: 'min(500px, 50vh)' }}>
                                     <div className="col-span-full grid grid-cols-2 px-4 py-1.5 bg-gray-50 rounded-lg text-[9px] font-black text-gray-400 uppercase tracking-widest border border-gray-100">
-                                        <span>Ad Type</span>
+                                        <span>Breakpoint Type</span>
                                         <span className="text-right">Dimension (Pixel)</span>
                                     </div>
-                                    {standardPresets.map(p => {
+                                    {availablePresets.map((p, index) => {
                                         const id = `${p.name}-${p.width}x${p.height}`;
                                         const isSelected = !!selectedTargets.find(t => t.id === id);
                                         return (
@@ -230,6 +228,13 @@ const DuplicateStageModal: React.FC<DuplicateStageModalProps> = ({ isOpen, onClo
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-3">
+                                                    <div
+                                                        className={`text-[9px] font-black text-white rounded-md px-1.5 py-0.5 shrink-0 w-6 text-center transition-all ${
+                                                            isSelected ? 'bg-primary' : 'bg-gray-300'
+                                                        }`}
+                                                    >
+                                                        {index + 1}
+                                                    </div>
                                                     <div className={`size-5 rounded border flex items-center justify-center transition-colors ${
                                                         isSelected ? 'bg-primary border-primary' : 'bg-transparent border-gray-300'
                                                     }`}>
@@ -257,11 +262,14 @@ const DuplicateStageModal: React.FC<DuplicateStageModalProps> = ({ isOpen, onClo
                                 <div className="flex flex-col gap-2 mt-auto">
                                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Selected List</label>
                                     <div className="flex flex-wrap gap-2">
-                                        {selectedTargets.map(t => (
+                                        {selectedTargets.map((t, index) => (
                                             <div 
                                                 key={t.id}
                                                 className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full border border-gray-200 group animate-in slide-in-from-right-2 duration-200"
                                             >
+                                                <span className="text-[9px] font-black bg-gray-300 text-white size-4 rounded-full flex items-center justify-center shrink-0">
+                                                    {index + 1}
+                                                </span>
                                                 <span className="text-[10px] font-bold text-gray-600">{t.name}</span>
                                                 <button 
                                                     onClick={() => removeTarget(t.id)}

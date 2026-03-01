@@ -2455,6 +2455,19 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                     });
                     const method = (fm.method || 'POST').toUpperCase();
                     const headers: Record<string, string> = {};
+                    
+                    // Parse custom headers if any
+                    if (fm.headers) {
+                        try {
+                            const customHeaders = JSON.parse(fm.headers);
+                            if (typeof customHeaders === 'object' && customHeaders !== null) {
+                                Object.assign(headers, customHeaders);
+                            }
+                        } catch (e) {
+                            console.warn("[FormSubmit] Header JSON parse error:", e);
+                        }
+                    }
+
                     let body: string | undefined;
                     if (fm.submitFormat === 'xml') {
                         const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');

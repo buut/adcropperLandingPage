@@ -7263,6 +7263,17 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                 <input type="text" value={fm.endpoint || ''} onChange={e => updateFm({ endpoint: e.target.value })} className={inputCls} placeholder="https://api.example.com/submit" />
                                             </div>
 
+                                            {/* Headers */}
+                                            <div className="flex flex-col gap-1">
+                                                <span className={labelCls}>Headers (JSON)</span>
+                                                <textarea 
+                                                    value={fm.headers || ''} 
+                                                    onChange={e => updateFm({ headers: e.target.value })} 
+                                                    className={`${inputCls} min-h-[60px] font-mono text-[9px] py-1.5 leading-relaxed`} 
+                                                    placeholder='{"Authorization": "Bearer ...", "X-Custom": "Value"}' 
+                                                />
+                                            </div>
+
                                             {/* Method */}
                                             <div className="flex flex-col gap-1">
                                                 <span className={labelCls}>Method</span>
@@ -7299,7 +7310,28 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                             <div key={f.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-all ${isIncluded ? 'border-primary/20 bg-primary/5' : 'border-gray-100 bg-gray-50'}`}>
                                                                 <span className={`material-symbols-outlined text-[11px] ${isIncluded ? 'text-primary' : 'text-gray-300'}`}>{ICONS[f.formType] || 'input'}</span>
                                                                 <div className="flex-1 min-w-0">
-                                                                    <span className={`text-[9px] font-bold truncate block ${f.hasName ? 'text-gray-800' : 'text-gray-400 italic'}`}>{f.name}</span>
+                                                                    <input 
+                                                                        type="text"
+                                                                        value={f.hasName ? f.name : ''}
+                                                                        placeholder={f.name}
+                                                                        className={`w-full bg-transparent text-[9px] font-bold outline-none focus:text-primary ${f.hasName ? 'text-gray-800' : 'text-gray-400 italic'}`}
+                                                                        onChange={(e) => {
+                                                                            const newName = e.target.value;
+                                                                            const inputLayer = (currentStage?.layers || []).find(l => l.id === f.id);
+                                                                            if (inputLayer) {
+                                                                                try {
+                                                                                    const m = JSON.parse(inputLayer.variant || '{}');
+                                                                                    const oldName = m.name || m.label || m.formType;
+                                                                                    m.name = newName;
+                                                                                    onUpdateLayers([f.id], { variant: JSON.stringify(m) });
+                                                                                    
+                                                                                    if (Array.isArray(fm.submitFields)) {
+                                                                                        updateFm({ submitFields: fm.submitFields.map((n: string) => n === oldName ? newName : n) });
+                                                                                    }
+                                                                                } catch {}
+                                                                            }
+                                                                        }}
+                                                                    />
                                                                 </div>
                                                                 <span className="text-[8px] text-gray-400 bg-gray-100 rounded px-1.5 py-0.5 font-semibold shrink-0">{typeLabel}</span>
                                                                 {!f.hasName && <span className="material-symbols-outlined text-[10px] text-amber-400" title="Field Name not set">warning</span>}
