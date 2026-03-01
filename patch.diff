@@ -1,0 +1,570 @@
+diff --git a/src/components/BannerTextEditor/components/RightInspector.tsx b/src/components/BannerTextEditor/components/RightInspector.tsx
+index ae769a0..9f4b13f 100644
+--- a/src/components/BannerTextEditor/components/RightInspector.tsx
++++ b/src/components/BannerTextEditor/components/RightInspector.tsx
+@@ -14,18 +14,67 @@ const FONTS = [
+ const RightInspector: React.FC<RightInspectorProps> = ({ textElem }) => {
+   const { updateText, deleteText, duplicateText, pushHistory, editingId } = useEditorStore();
+   const isEditing = editingId === textElem.id;
++  
++  const [savedRange, setSavedRange] = React.useState<Range | null>(null);
++
++  const syncHTML = () => {
++    const node = document.getElementById(`text-node-${textElem.id}`);
++    if (node) updateText(textElem.id, { text: node.innerHTML });
++  };
++
++  React.useEffect(() => {
++    const handleSelectionChange = () => {
++      const sel = window.getSelection();
++      if (sel && sel.rangeCount > 0) {
++        const activeEl = document.activeElement;
++        // Only save selection if we're actively inside a contenteditable!
++        if (activeEl?.hasAttribute('contenteditable')) {
++          setSavedRange(sel.getRangeAt(0).cloneRange());
++        }
++      }
++    };
++    document.addEventListener('selectionchange', handleSelectionChange);
++    return () => document.removeEventListener('selectionchange', handleSelectionChange);
++  }, []);
+ 
+   const handleChange = (key: keyof TextElement, value: any) => {
+     if (isEditing) {
+       // In rich text mode, we apply specific formatting for selection
+       if (key === 'fontSize') {
+-        // execCommand 'fontSize' is 1-7, which is very limited. 
+-        // We'll use a span with style instead.
++        const sel = window.getSelection();
++        let wasRestored = false;
++        const activeEl = document.activeElement as HTMLElement;
++
++        if ((!sel || sel.rangeCount === 0 || !document.activeElement?.hasAttribute('contenteditable')) && savedRange) {
++          sel?.removeAllRanges();
++          sel?.addRange(savedRange);
++          wasRestored = true;
++        }
++        
+         applySpanStyle('fontSize', `${value}px`);
+-      } else if (key === 'color') {
+-        document.execCommand('foreColor', false, value);
+-      } else if (key === 'fontFamily') {
+-        document.execCommand('fontName', false, value);
++        syncHTML();
++
++        if (wasRestored && activeEl) activeEl.focus();
++      } else if (key === 'color' || key === 'fontFamily') {
++        const activeEl = document.activeElement as HTMLElement;
++        const sel = window.getSelection();
++        let wasRestored = false;
++        
++        if ((!sel || sel.rangeCount === 0 || !document.activeElement?.hasAttribute('contenteditable')) && savedRange) {
++          sel?.removeAllRanges();
++          sel?.addRange(savedRange);
++          wasRestored = true;
++        }
++        
++        if (key === 'color') {
++          document.execCommand('foreColor', false, value);
++        } else {
++          document.execCommand('fontName', false, value);
++        }
++        
++        syncHTML();
++
++        if (wasRestored && activeEl) activeEl.focus();
+       } else {
+         updateText(textElem.id, { [key]: value });
+       }
+@@ -99,8 +148,12 @@ const RightInspector: React.FC<RightInspectorProps> = ({ textElem }) => {
+         {/* Font Styles (Bold, Italic, Underline) - Direct ExecCommand when editing */}
+         <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-md w-fit">
+           <button 
++            onMouseDown={(e) => e.preventDefault()}
+             onClick={() => { 
+-                if (isEditing) document.execCommand('bold');
++                if (isEditing) {
++                  document.execCommand('bold');
++                  syncHTML();
++                }
+                 else handleChange('fontWeight', textElem.fontWeight === 'bold' ? 'normal' : 'bold'); 
+                 handleCommit(); 
+             }}
+@@ -109,8 +162,12 @@ const RightInspector: React.FC<RightInspectorProps> = ({ textElem }) => {
+             <Bold size={16} />
+           </button>
+           <button 
++            onMouseDown={(e) => e.preventDefault()}
+             onClick={() => { 
+-                if (isEditing) document.execCommand('italic');
++                if (isEditing) {
++                  document.execCommand('italic');
++                  syncHTML();
++                }
+                 else handleChange('fontStyle', textElem.fontStyle === 'italic' ? 'normal' : 'italic'); 
+                 handleCommit(); 
+             }}
+@@ -119,8 +176,12 @@ const RightInspector: React.FC<RightInspectorProps> = ({ textElem }) => {
+             <Italic size={16} />
+           </button>
+           <button 
++            onMouseDown={(e) => e.preventDefault()}
+             onClick={() => { 
+-                if (isEditing) document.execCommand('underline');
++                if (isEditing) {
++                  document.execCommand('underline');
++                  syncHTML();
++                }
+                 else handleChange('textDecoration', textElem.textDecoration === 'underline' ? 'none' : 'underline'); 
+                 handleCommit(); 
+             }}
+diff --git a/src/components/BannerTextEditor/components/TextNode.tsx b/src/components/BannerTextEditor/components/TextNode.tsx
+index 81ef71d..de0ba77 100644
+--- a/src/components/BannerTextEditor/components/TextNode.tsx
++++ b/src/components/BannerTextEditor/components/TextNode.tsx
+@@ -19,7 +19,10 @@ const TextNode: React.FC<TextNodeProps> = ({ textElem, containerRef }) => {
+     if (!isEditing) return;
+ 
+     const handleClickOutside = (e: MouseEvent) => {
+-      if (targetRef.current && !targetRef.current.contains(e.target as Node)) {
++      const target = e.target as HTMLElement;
++      const isIgnore = target.closest('.ignore-click-outside');
++      
++      if (targetRef.current && !targetRef.current.contains(target) && !isIgnore) {
+         setIsEditing(false);
+         setEditingId(null);
+         if (targetRef.current) {
+@@ -64,6 +67,7 @@ const TextNode: React.FC<TextNodeProps> = ({ textElem, containerRef }) => {
+   return (
+     <>
+       <div
++        id={`text-node-${textElem.id}`}
+         ref={targetRef}
+         onClick={handlePointerDown}
+         onDoubleClick={handleDoubleClick}
+diff --git a/src/components/ColorPicker.tsx b/src/components/ColorPicker.tsx
+index 0f81c7f..1d0e554 100644
+--- a/src/components/ColorPicker.tsx
++++ b/src/components/ColorPicker.tsx
+@@ -542,6 +542,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
+             ) : variant === 'default' ? (
+                 <button
+                     type="button"
++                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                     onClick={() => setIsOpen(!isOpen)}
+                     className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-gray-200 bg-white hover:border-primary/40 hover:bg-gray-50/50 transition-all text-left"
+                 >
+@@ -567,6 +568,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
+             ) : (
+                 <button
+                     type="button"
++                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                     onClick={() => setIsOpen(!isOpen)}
+                     className="size-9 flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:border-primary/40 hover:bg-gray-50/50 transition-all"
+                     title={value === 'transparent' ? 'NONE' : rgbToHex(displayRgb.r, displayRgb.g, displayRgb.b).toUpperCase()}
+diff --git a/src/components/FontSelector.tsx b/src/components/FontSelector.tsx
+index d5ab594..40ceb86 100644
+--- a/src/components/FontSelector.tsx
++++ b/src/components/FontSelector.tsx
+@@ -9,9 +9,10 @@ interface FontSelectorProps {
+     style?: React.CSSProperties;
+     className?: string;
+     onMouseDown?: (e: React.MouseEvent) => void;
++    hideSearch?: boolean;
+ }
+ 
+-const FontSelector: React.FC<FontSelectorProps> = ({ fonts, value, onChange, style, className, onMouseDown }) => {
++const FontSelector: React.FC<FontSelectorProps> = ({ fonts, value, onChange, style, className, onMouseDown, hideSearch }) => {
+     const [isOpen, setIsOpen] = useState(false);
+     const [searchTerm, setSearchTerm] = useState('');
+     const dropdownRef = useRef<HTMLDivElement>(null);
+@@ -57,23 +58,25 @@ const FontSelector: React.FC<FontSelectorProps> = ({ fonts, value, onChange, sty
+                     }}
+                     onMouseDown={(e) => e.stopPropagation()}
+                 >
+-                    <div className="p-2 border-b border-gray-50 bg-gray-50/30">
+-                        <div className="relative">
+-                            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[16px]">search</span>
+-                            <input
+-                                autoFocus
+-                                type="text"
+-                                placeholder="Search fonts..."
+-                                className="w-full h-8 pl-8 pr-3 bg-white border border-gray-100 rounded-lg text-[11px] font-bold outline-none focus:border-primary transition-all placeholder:text-gray-300"
+-                                value={searchTerm}
+-                                onChange={(e) => setSearchTerm(e.target.value)}
+-                                onKeyDown={(e) => {
+-                                    e.stopPropagation();
+-                                    if (e.key === 'Escape') setIsOpen(false);
+-                                }}
+-                            />
++                    {!hideSearch && (
++                        <div className="p-2 border-b border-gray-50 bg-gray-50/30">
++                            <div className="relative">
++                                <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[16px]">search</span>
++                                <input
++                                    autoFocus
++                                    type="text"
++                                    placeholder="Search fonts..."
++                                    className="w-full h-8 pl-8 pr-3 bg-white border border-gray-100 rounded-lg text-[11px] font-bold outline-none focus:border-primary transition-all placeholder:text-gray-300"
++                                    value={searchTerm}
++                                    onChange={(e) => setSearchTerm(e.target.value)}
++                                    onKeyDown={(e) => {
++                                        e.stopPropagation();
++                                        if (e.key === 'Escape') setIsOpen(false);
++                                    }}
++                                />
++                            </div>
+                         </div>
+-                    </div>
++                    )}
+                     <div className="overflow-y-auto max-h-[250px] p-1 custom-scrollbar">
+                         {filteredBrand.length > 0 && (
+                             <div className="mb-2">
+diff --git a/src/components/PropertiesBar.tsx b/src/components/PropertiesBar.tsx
+index 5569005..7cb39c0 100644
+--- a/src/components/PropertiesBar.tsx
++++ b/src/components/PropertiesBar.tsx
+@@ -737,8 +737,18 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                         fontStyle: styles.fontStyle,
+                         textColor: styles.color,
+                         textDecoration: styles.textDecoration,
+-                        lineHeight: styles.lineHeight === 'normal' ? '1.2' : styles.lineHeight, // Fallback
++                        lineHeight: (() => {
++                            let lh = styles.lineHeight;
++                            if (lh === 'normal') return '1.2';
++                            if (lh.includes('px')) {
++                                const fs = parseFloat(styles.fontSize);
++                                const lhp = parseFloat(lh);
++                                if (fs > 0) return (lhp / fs).toFixed(1);
++                            }
++                            return lh;
++                        })(),
+                         letterSpacing: styles.letterSpacing === 'normal' ? '0' : styles.letterSpacing.replace('px', ''),
++                        isSelected: !range.collapsed
+                     });
+                 } else {
+                     // Only clear if we were editing but now selection is outside
+@@ -1480,15 +1490,17 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                 <div className="space-y-1.5">
+                     {allStops.map((stop: any, sIdx: number) => (
+                         <div key={stop.id || sIdx} className="flex items-center gap-2 group p-1.5 bg-gray-50/50 hover:bg-white rounded-xl transition-all border border-gray-100/50">
+-                            <ColorPicker 
+-                                variant="minimal"
+-                                value={stop.color}
+-                                onChange={(c) => {
+-                                    const next = allStops.map((s, i) => i === sIdx ? { ...s, color: c } : s);
+-                                    onUpdateStops(next);
+-                                }}
+-                                swatches={documentColors}
+-                            />
++                            <div onMouseDown={(e) => { if (editingLayerId) { e.preventDefault(); e.stopPropagation(); } }}>
++                                <ColorPicker 
++                                    variant="minimal"
++                                    value={stop.color}
++                                    onChange={(c) => {
++                                        const next = allStops.map((s, i) => i === sIdx ? { ...s, color: c } : s);
++                                        onUpdateStops(next);
++                                    }}
++                                    swatches={documentColors}
++                                />
++                            </div>
+                             <div className="flex-1 flex gap-2 items-center">
+                                 <input 
+                                     type="range" min="0" max="1" step="0.01" value={stop.offset}
+@@ -4895,6 +4907,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                                                                                 Font Family
+                                                                             </label>
+                                                                             <FontSelector 
++                                                                                hideSearch={surgicalStyles.isSelected}
+                                                                                 value={txtMeta.fontFamily || 'Inter'}
+                                                                                 onChange={(val) => {
+                                                                                     const currentMeta = JSON.parse(txt.variant || '{}');
+@@ -5257,6 +5270,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                                                         <div className="relative group/font">
+                                                             <FontSelector 
+                                                                 fonts={fonts}
++                                                                hideSearch={surgicalStyles.isSelected}
+                                                                 value={prop.value || ''}
+                                                                 onMouseDown={(e) => e.stopPropagation()}
+                                                                 onChange={(value) => {
+@@ -5411,7 +5425,13 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                             tags.forEach(el => {
+                                 const htmlEl = el as HTMLElement;
+                                 changedProps.forEach(prop => {
+-                                    if (prop === 'textColor' || prop === 'colorCode') { htmlEl.style.color = ''; htmlEl.removeAttribute('color'); }
++                                    if (prop === 'textColor' || prop === 'textBgType' || prop === 'textStops' || prop.startsWith('textGradient')) { 
++                                        htmlEl.style.color = ''; 
++                                        htmlEl.style.backgroundImage = '';
++                                        htmlEl.style.webkitBackgroundClip = '';
++                                        (htmlEl.style as any).webkitTextFillColor = '';
++                                        htmlEl.removeAttribute('color'); 
++                                    }
+                                     if (prop === 'fontFamily') { htmlEl.style.fontFamily = ''; htmlEl.removeAttribute('face'); }
+                                     if (prop === 'fontWeight') { htmlEl.style.fontWeight = ''; if (htmlEl.tagName.toLowerCase() === 'b') { const bg = htmlEl.style.backgroundColor; const span = document.createElement('span'); span.innerHTML = htmlEl.innerHTML; if(bg) span.style.backgroundColor = bg; htmlEl.replaceWith(span); } }
+                                     if (prop === 'fontStyle') htmlEl.style.fontStyle = '';
+@@ -5422,9 +5442,9 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                                     if (prop === 'textDecoration') { htmlEl.style.textDecoration = ''; if (['u', 'strike', 's'].includes(htmlEl.tagName.toLowerCase())) { const span = document.createElement('span'); span.innerHTML = htmlEl.innerHTML; htmlEl.replaceWith(span); } }
+                                 });
+                                 
+-                                if (htmlEl.tagName.toLowerCase() === 'span' && htmlEl.getAttribute('style') === '') htmlEl.removeAttribute('style');
++                                if (htmlEl.tagName.toLowerCase() === 'span' && (htmlEl.getAttribute('style') === '' || !htmlEl.getAttribute('style'))) htmlEl.removeAttribute('style');
+                                 
+-                                // Unwrap span if no attributes
++                                // Unwrap span if no attributes and no style
+                                 if (htmlEl.tagName.toLowerCase() === 'span' && htmlEl.attributes.length === 0) {
+                                     while (htmlEl.firstChild) htmlEl.parentNode?.insertBefore(htmlEl.firstChild, htmlEl);
+                                     htmlEl.parentNode?.removeChild(htmlEl);
+@@ -5452,10 +5472,10 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                         const savedActiveElement = document.activeElement as HTMLElement;
+                         const wasInSidebar = savedActiveElement && (savedActiveElement.tagName === 'INPUT' || savedActiveElement.tagName === 'SELECT' || savedActiveElement.tagName === 'TEXTAREA');
+ 
+-                        const textProps = ['textColor', 'textColor2', 'textBgType', 'textGradientAngle', 'textGradientLength', 'textGradientCenterX', 'textGradientCenterY', 'textGradientRadius', 'fontFamily', 'fontWeight', 'fontSize', 'lineHeight', 'letterSpacing', 'bgType', 'colorCode', 'colorCode2', 'textStrokeColor', 'textStrokeWidth'];
++                        const textProps = ['textColor', 'textColor2', 'textBgType', 'textGradientAngle', 'textGradientLength', 'textGradientCenterX', 'textGradientCenterY', 'textGradientRadius', 'fontFamily', 'fontWeight', 'fontSize', 'lineHeight', 'letterSpacing', 'bgType', 'colorCode', 'colorCode2', 'textStrokeColor', 'textStrokeWidth', 'textAlign', 'verticalAlign', 'maxLines', 'overflowBehavior'];
+                         
+                         // Check if ANY update is for surgical styling
+-                        const surgicalPropsList = ['textColor', 'fontFamily', 'fontWeight', 'fontSize', 'lineHeight', 'letterSpacing', 'fontStyle', 'textDecoration', 'textStops', 'textBgType', 'textGradientAngle', 'textGradientRadius', 'textGradientCenterX', 'textGradientCenterY', 'textGradientLength'];
++                        const surgicalPropsList = ['textColor', 'fontFamily', 'fontWeight', 'fontSize', 'fontStyle', 'textDecoration', 'textStops', 'textBgType', 'textGradientAngle', 'textGradientRadius', 'textGradientCenterX', 'textGradientCenterY', 'textGradientLength'];
+                         const hasSurgicalProp = Object.keys(batchUpdates).some(k => surgicalPropsList.includes(k));
+ 
+                         const editor = editingLayerId ? (document.getElementById(`editor-${editingLayerId}`) as HTMLElement) : null;
+@@ -5471,7 +5491,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+ 
+                             if (editor && hasSurgicalProp) {
+                                 try {
+-                                    if (!range || !isSelectionInEditor || range.collapsed) {
++                                    if (!range || !isSelectionInEditor) {
+                                         // Fallback to last known good range if current one is lost/outside
+                                         if (lastRangeRef.current) {
+                                             const lastNode = lastRangeRef.current.commonAncestorContainer;
+@@ -5483,7 +5503,8 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                                         }
+                                     }
+ 
+-                                    if (!range || !isSelectionInEditor) {
++                                    // If we are NOT in edit mode (just layer selected), force "Select All" to unify
++                                    if (!editingLayerId && (!range || !isSelectionInEditor)) {
+                                         const fullRange = document.createRange();
+                                         fullRange.selectNodeContents(editor);
+                                         range = fullRange;
+@@ -5548,14 +5569,18 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                             let finalBatchUpdates = { ...batchUpdates };
+                             const isActualSelection = range && !range.collapsed && isSelectionInEditor;
+                             
+-                                if (editor && isActualSelection && hasSurgicalProp) {
+-                                    // Filter out surgical props from top-level meta so they only live in the innerHTML spans
++                                if (editor && isSelectionInEditor) {
+                                     const filteredUpdates: Record<string, any> = {};
+                                     Object.keys(finalBatchUpdates).forEach(k => {
+                                         if (!surgicalPropsList.includes(k)) {
+                                             filteredUpdates[k] = finalBatchUpdates[k];
++                                        } else if (range && range.collapsed) {
++                                            filteredUpdates[k] = finalBatchUpdates[k];
+                                         }
+                                     });
++                                    if (isActualSelection) {
++                                        surgicalPropsList.forEach(p => delete filteredUpdates[p]);
++                                    }
+                                     finalBatchUpdates = filteredUpdates;
+                                 }
+                             
+@@ -5577,6 +5602,19 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+ 
+                             const nextMeta = { ...meta, ...finalBatchUpdates };
+                             if (editor) {
++                                const changedPropsForStripping = Object.keys(finalBatchUpdates).filter(k => {
++                                    if (k === 'label') return false;
++                                    // If we have an active selection range in the editor, NEVER strip surgical props
++                                    if (isSelectionInEditor && surgicalPropsList.includes(k)) return false;
++                                    return true;
++                                });
++                                if (changedPropsForStripping.length > 0) {
++                                    const currentHTML = editor.innerHTML;
++                                    const stripped = stripInlineStyles(currentHTML, changedPropsForStripping);
++                                    if (stripped !== currentHTML) {
++                                        editor.innerHTML = stripped;
++                                    }
++                                }
+                                 nextMeta.label = editor.innerHTML;
+                             }
+                             onUpdateLayers(selectedLayerIds, { variant: JSON.stringify(nextMeta) });
+@@ -5809,6 +5847,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                                                 <FontSelector 
+                                                     fonts={fonts}
+                                                     value={getMetaValue('fontFamily')}
++                                                    hideSearch={surgicalStyles.isSelected}
+                                                     onMouseDown={(e) => {
+                                                         if (editingLayerId) {
+                                                             e.stopPropagation();
+@@ -5832,6 +5871,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                                                 <div className="relative group/weight">
+                                                     <WeightSelector 
+                                                         value={getMetaValue('fontWeight')}
++                                                        hideSearch={surgicalStyles.isSelected}
+                                                         weights={(() => {
+                                                             const selectedFont = fonts.find(f => f.family === getMetaValue('fontFamily'));
+                                                             if (selectedFont?.variants?.length) {
+@@ -6227,12 +6267,14 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+ 
+                                     <div className="grid grid-cols-1 gap-3">
+                                         { (getMetaValue('textBgType') === 'solid' || !getMetaValue('textBgType')) ? (
+-                                            <ColorPicker 
+-                                                label="Text Color"
+-                                                value={getMetaValue('textColor') === 'Mixed' ? '#000000' : (getMetaValue('textColor') || '#000000')}
+-                                                onChange={(val) => updateMeta('textColor', val)}
+-                                                swatches={documentColors}
+-                                            />
++                                            <div onMouseDown={(e) => { if (editingLayerId) { e.preventDefault(); e.stopPropagation(); } }}>
++                                                <ColorPicker 
++                                                    label="Text Color"
++                                                    value={getMetaValue('textColor') === 'Mixed' ? '#000000' : (getMetaValue('textColor') || '#000000')}
++                                                    onChange={(val) => updateMeta('textColor', val)}
++                                                    swatches={documentColors}
++                                                />
++                                            </div>
+                                         ) : (
+                                             <>
+                                                 {renderGradientStopsManager(
+@@ -6310,12 +6352,14 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+                                             Text Stroke
+                                         </label>
+                                         <div className="grid grid-cols-1 gap-3">
+-                                            <ColorPicker 
+-                                                label="Stroke Color"
+-                                                value={getMetaValue('textStrokeColor') || 'transparent'}
+-                                                onChange={(val) => updateMeta('textStrokeColor', val)}
+-                                                swatches={documentColors}
+-                                            />
++                                            <div onMouseDown={(e) => { if (editingLayerId) { e.preventDefault(); e.stopPropagation(); } }}>
++                                                <ColorPicker 
++                                                    label="Stroke Color"
++                                                    value={getMetaValue('textStrokeColor') || 'transparent'}
++                                                    onChange={(val) => updateMeta('textStrokeColor', val)}
++                                                    swatches={documentColors}
++                                                />
++                                            </div>
+                                             <div className="flex flex-col gap-1.5">
+                                                 <div className="flex items-center justify-between pl-1">
+                                                     <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Stroke Width</label>
+@@ -6381,20 +6425,22 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
+ 
+                                         <div className="grid grid-cols-1 gap-2">
+                                             { (getMetaValue('bgType') === 'solid' || getMetaValue('bgType') === 'none' || !getMetaValue('bgType')) ? (
+-                                                <ColorPicker 
+-                                                    label={getMetaValue('bgType') === 'none' ? 'Background (Disabled)' : 'Background Color'}
+-                                                    value={getMetaValue('bgType') === 'none' ? 'transparent' : (getMetaValue('colorCode') || '#ffffff')}
+-                                                    onChange={(val) => {
+-                                                        const updates: any = { colorCode: val };
+-                                                        const currentBgType = localValues.bgType || getMetaValue('bgType');
+-                                                        if (!currentBgType || currentBgType === 'none') {
+-                                                            updates.bgType = 'solid';
+-                                                            setLocalValues(prev => ({ ...prev, bgType: 'solid' }));
+-                                                        }
+-                                                        updateMeta(updates);
+-                                                    }}
+-                                                    swatches={documentColors}
+-                                                />
++                                                <div onMouseDown={(e) => { if (editingLayerId) { e.preventDefault(); e.stopPropagation(); } }}>
++                                                    <ColorPicker 
++                                                        label={getMetaValue('bgType') === 'none' ? 'Background (Disabled)' : 'Background Color'}
++                                                        value={getMetaValue('bgType') === 'none' ? 'transparent' : (getMetaValue('colorCode') || '#ffffff')}
++                                                        onChange={(val) => {
++                                                            const updates: any = { colorCode: val };
++                                                            const currentBgType = localValues.bgType || getMetaValue('bgType');
++                                                            if (!currentBgType || currentBgType === 'none') {
++                                                                updates.bgType = 'solid';
++                                                                setLocalValues(prev => ({ ...prev, bgType: 'solid' }));
++                                                            }
++                                                            updateMeta(updates);
++                                                        }}
++                                                        swatches={documentColors}
++                                                    />
++                                                </div>
+                                             ) : (
+                                                 <>
+                                                     {renderGradientStopsManager(
+diff --git a/src/components/WeightSelector.tsx b/src/components/WeightSelector.tsx
+index 66450e4..5b33c40 100644
+--- a/src/components/WeightSelector.tsx
++++ b/src/components/WeightSelector.tsx
+@@ -8,9 +8,10 @@ interface WeightSelectorProps {
+     weights: string[];
+     onMouseDown?: (e: React.MouseEvent) => void;
+     className?: string;
++    hideSearch?: boolean;
+ }
+ 
+-const WeightSelector: React.FC<WeightSelectorProps> = ({ value, onChange, weights, onMouseDown, className }) => {
++const WeightSelector: React.FC<WeightSelectorProps> = ({ value, onChange, weights, onMouseDown, className, hideSearch }) => {
+     const [isOpen, setIsOpen] = useState(false);
+     const [searchTerm, setSearchTerm] = useState('');
+     const dropdownRef = useRef<HTMLDivElement>(null);
+@@ -70,23 +71,25 @@ const WeightSelector: React.FC<WeightSelectorProps> = ({ value, onChange, weight
+                     }}
+                     onMouseDown={(e) => e.stopPropagation()}
+                 >
+-                    <div className="p-2 border-b border-gray-50 bg-gray-50/30">
+-                        <div className="relative">
+-                            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[16px]">search</span>
+-                            <input
+-                                autoFocus
+-                                type="text"
+-                                placeholder="Search weights..."
+-                                className="w-full h-8 pl-8 pr-3 bg-white border border-gray-100 rounded-lg text-[11px] font-bold outline-none focus:border-primary transition-all placeholder:text-gray-300"
+-                                value={searchTerm}
+-                                onChange={(e) => setSearchTerm(e.target.value)}
+-                                onKeyDown={(e) => {
+-                                    e.stopPropagation();
+-                                    if (e.key === 'Escape') setIsOpen(false);
+-                                }}
+-                            />
++                    {!hideSearch && (
++                        <div className="p-2 border-b border-gray-50 bg-gray-50/30">
++                            <div className="relative">
++                                <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[16px]">search</span>
++                                <input
++                                    autoFocus
++                                    type="text"
++                                    placeholder="Search weights..."
++                                    className="w-full h-8 pl-8 pr-3 bg-white border border-gray-100 rounded-lg text-[11px] font-bold outline-none focus:border-primary transition-all placeholder:text-gray-300"
++                                    value={searchTerm}
++                                    onChange={(e) => setSearchTerm(e.target.value)}
++                                    onKeyDown={(e) => {
++                                        e.stopPropagation();
++                                        if (e.key === 'Escape') setIsOpen(false);
++                                    }}
++                                />
++                            </div>
+                         </div>
+-                    </div>
++                    )}
+                     <div className="overflow-y-auto max-h-[250px] p-1 custom-scrollbar">
+                         <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Font Weights</div>
+                         {filteredWeights.map(weight => {
+diff --git a/src/utils/richText.ts b/src/utils/richText.ts
+index 4a9ffd9..b0a2742 100644
+--- a/src/utils/richText.ts
++++ b/src/utils/richText.ts
+@@ -83,7 +83,7 @@ export const applyRichTextFormat = (editorId: string, command: string, value: an
+                                     htmlEl.style.webkitBackgroundClip = 'text';
+                                     (htmlEl.style as any).webkitTextFillColor = 'transparent';
+                                     htmlEl.style.color = 'transparent';
+-                                    htmlEl.style.display = 'inline-block'; // Necessary for clip to work well in some scenarios
++                                    htmlEl.style.display = 'inline-block';
+                                 } else {
+                                     htmlEl.style.color = value;
+                                     htmlEl.style.backgroundImage = '';
+@@ -128,7 +128,13 @@ export const applyRichTextFormat = (editorId: string, command: string, value: an
+                         if (command === 'fontName') { child.style.fontFamily = ''; if (child.hasAttribute('face')) child.removeAttribute('face'); }
+                         if (command === 'fontWeight') child.style.fontWeight = '';
+                         if (command === 'fontStyle') child.style.fontStyle = '';
+-                        if (command === 'foreColor') { child.style.color = ''; if (child.hasAttribute('color')) child.removeAttribute('color'); }
++                        if (command === 'foreColor') { 
++                            child.style.color = ''; 
++                            child.style.backgroundImage = '';
++                            child.style.webkitBackgroundClip = '';
++                            (child.style as any).webkitTextFillColor = '';
++                            if (child.hasAttribute('color')) child.removeAttribute('color'); 
++                        }
+                         if (command === 'letterSpacing') child.style.letterSpacing = '';
+                         if (command === 'lineHeight') child.style.lineHeight = '';
+                     }

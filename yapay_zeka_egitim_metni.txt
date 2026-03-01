@@ -1,0 +1,71 @@
+# Yapay Zeka Eğitim Metni – Reklam Tasarım Aracı (Ad Cropper Design Tool)
+
+Bu metin, reklam ve sosyal medya tasarım araçlarında kullanılabilecek yapay zeka modellerinin eğitimi için hazırlanmış bir referans dokümandır.
+
+---
+## 1. Genel Kavramlar
+
+**Stage (Sahne):** Bir reklam biriminin tek bir çerçevesidir. Örneğin bir Instagram hikayesi, bir Facebook reklamı veya bir banner. Her stage’in genişlik, yükseklik ve süre (saniye) değerleri vardır. Birden fazla stage ile kısa videolar veya carousel reklamlar oluşturulabilir.
+
+**Layer (Katman):** Stage üzerindeki her bir öğe bir katmandır. Görsel, metin, buton, şekil, video veya widget olabilir. Katmanlar üst üste biner; zIndex ile sıralanır. Katmanlar gruplanabilir (parent-child ilişkisi).
+
+**Timeline (Zaman çizelgesi):** Stage süresi boyunca katmanların ve animasyonların ne zaman devreye girdiği timeline üzerinde gösterilir. Süre saniye veya saniyenin yüzde birimi (centisecond) ile ifade edilebilir.
+
+---
+## 2. Katman Türleri
+
+- **image:** Statik veya dinamik görsel. URL ile eklenir.
+- **text:** Metin bloğu. Font, boyut, renk, hizalama ayarlanabilir.
+- **button:** Tıklanabilir buton. Metin ve stil özelleştirilebilir.
+- **video:** Video dosyası. Oynatma, döngü, sessiz başlatma gibi seçenekler vardır.
+- **shape:** Vektör veya basit şekil (çokgen, dikdörtgen vb.).
+- **widget:** Harici bileşen (ör. e-posta toplama formu). HTML/JS tabanlı olabilir.
+- **group:** Alt katmanları içeren gruplama katmanı. Grup taşınırken veya ölçeklenirken alt katmanlar birlikte hareket eder.
+
+---
+## 3. Animasyon Kavramları
+
+**Entry (Giriş):** Katmanın sahnede ilk görünme animasyonu. Başlangıç zamanı (start) ve süre (duration) saniye cinsindendir. Örnek efektler: Fade In, Slide In, Zoom In, Bounce.
+
+**Main (Ana):** Katman sahneye girdikten sonra oynayan ana animasyon. Tekrarlanabilir (repeat). Örnek: hafif pulse, swing, rotate.
+
+**Exit (Çıkış):** Katmanın sahneden kaybolma animasyonu. Süre sonunda veya belirli bir zamanda tetiklenir. Örnek: Fade Out, Slide Out.
+
+**Keyframes:** Zaman çizelgesinde belirli anlarda konum, ölçek, rotasyon, opacity gibi özellikler tanımlanır; ara değerler interpolasyon ile hesaplanır. Easing (ease-in, ease-out, elastic, bounce vb.) geçişlerin hızını belirler.
+
+**Text Animation:** Metin katmanları için ayrı entry/main/exit animasyon seti tanımlanabilir (ör. harf harf veya kelime kelime animasyon).
+
+---
+## 4. Etkileşim ve Aksiyonlar (Actions)
+
+**Trigger (Tetikleyici):** Kullanıcı etkileşimi tetikleyicidir. Örnekler: tıklama (click), mouse üzerine gelme (mouseover), mouse ayrılma (mouseout). Tetikleyici bir katmana veya tüm stage’e bağlanabilir.
+
+**Hedef:** Aksiyonun uygulanacağı katman. Örneğin “Buton A’ya tıklandığında Görsel B’ye pulse efekti uygula.”
+
+**Aksiyon türleri:** Efekt adıyla tanımlanır (pulse, shake, glow, hide/show vb.). Her efektin parametreleri (süre, yoğunluk vb.) config ile verilebilir.
+
+---
+## 5. Tasarım Kuralları (Yapay Zeka İçin Öneriler)
+
+- Metin okunabilir olmalı: font boyutu küçük stage’lerde bile minimum 12–14px civarı tercih edilmeli.
+- Önemli bilgi (CTA, fiyat, kampanya mesajı) katman sıralamasında üstte (yüksek zIndex) ve görünür olmalı.
+- Animasyon süreleri genelde 0,3 saniye ile 1,5 saniye arasında tutulur; çok uzun giriş/çıkış izleyiciyi yorar.
+- Renk kontrastı erişilebilirlik ve okunabilirlik için yeterli olmalı (ör. koyu metin açık arka plan üzerinde).
+- Stage boyutları platforma uygun olmalı: Instagram kare 1080x1080, hikaye 1080x1920; Facebook feed için yaygın oranlar 1:1 veya 4:5.
+- Dinamik içerik (feed, liste) varsa döngü sayısı (loopCount) ve nerede duracağı (stopAtSecond) net tanımlanmalı.
+
+---
+## 6. Teknik Terimler Sözlüğü
+
+- **Opacity:** Saydamlık (0 = tam saydam, 1 veya 100% = tam opak).
+- **Transform:** Konum (x, y), döndürme (rotation, rotateX/Y/Z), ölçek (scale, scaleX/Y), çarpıtma (skew). transformOrigin dönüşümün referans noktasını belirler.
+- **Clip path:** Görseli veya katmanı belirli bir şekilde kesmek için kullanılır.
+- **Mask:** Bir katmanı başka bir katmanın şekliyle maskeleyerek gösterme.
+- **Guide lines:** Hizalama için kullanılan yatay/dikey rehber çizgileri.
+- **Marker:** Timeline üzerinde özel anları işaretleyen noktalar (ör. görsel değişim anı).
+- **Sync (senkronizasyon):** Birden fazla stage arasında katman/animasyon değişikliklerini eşitleme; özellikle farklı boyutlardaki stage’lerde kullanılır.
+
+---
+Bu metin, reklam tasarım araçları ve sahne/katman/animasyon/aksiyon mantığını anlayacak bir yapay zeka modelinin eğitim verisi olarak kullanılabilir. Model, kullanıcı niyetini (örn. “Ürün görseli solda, başlık sağda, buton altta”) bu kavramlara göre yapılandırılmış komutlara veya doğrudan stage/layer/animation tanımlarına dönüştürmeyi öğrenebilir.
+
+Son güncelleme: 2025.

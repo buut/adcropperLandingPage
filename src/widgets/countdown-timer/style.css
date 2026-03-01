@@ -1,0 +1,71 @@
+:root {
+    --bg-color: #f8fafc;
+    --text-color: #1e293b;
+    --accent-color: #3b82f6;
+    --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: transparent;
+    font-family: var(--font-family);
+    overflow: hidden;
+}
+
+.timer-container {
+    display: flex;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    width: 90%;
+    max-width: 600px;
+    justify-content: space-around;
+    flex-wrap: wrap;
+}
+
+.timer-segment {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+}
+
+.timer-segment span {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--accent-color);
+    line-height: 1;
+}
+
+.timer-segment label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    margin-top: 0.5rem;
+    font-weight: 600;
+}
+
+/* Responsiveness */
+@media (max-width: 480px) {
+    .timer-container {
+        gap: 0.5rem;
+        padding: 1rem;
+    }
+    .timer-segment {
+        min-width: 60px;
+    }
+    .timer-segment span {
+        font-size: 1.5rem;
+    }
+    .timer-segment label {
+        font-size: 0.6rem;
+    }
+}

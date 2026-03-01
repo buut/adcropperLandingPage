@@ -1,0 +1,190 @@
+{
+          "dynamicText": [
+        [{
+          "_id": "697cb9490f49e38f26e7c7b4",
+          "versionId": "697cb6840f49e38f26e7c7ac",
+          "campaignId": "697cb64d0f49e38f26e7c7aa",
+          "texts": [{
+              "name": "cup",
+              "tag": "adc-cup",
+              "type": "image",
+              "value": ""
+            },
+            {
+              "name": "bg",
+              "tag": "adc-bg",
+              "type": "image",
+              "value": ""
+            },
+            {
+              "name": "legal",
+              "tag": "adc-legal",
+              "type": "text",
+              "value": "18+ Play Resposibly"
+            },
+            {
+              "name": "ctatext",
+              "tag": "adc-ctatext",
+              "type": "text",
+              "value": "BET NOW"
+            },
+            {
+              "name": "hometeamlogo",
+              "tag": "adc-hometeamlogo",
+              "type": "image",
+              "value": "$.values[*].homeTeamLogo",
+              "isFeed": true,
+              "feedName": "homeTeamLogo"
+            },
+            {
+              "name": "awayteamlogo",
+              "tag": "adc-awayteamlogo",
+              "type": "image",
+              "value": "$.values[*].awayTeamLogo",
+              "isFeed": true,
+              "feedName": "awayTeamLogo"
+            },
+            {
+              "name": "messagetext",
+              "tag": "adc-messagetext",
+              "type": "text",
+              "value": "BOOSTED ODDS"
+            },
+            {
+              "name": "eventtime",
+              "tag": "adc-eventtime",
+              "type": "text",
+              "value": "5 AUG / 21:00"
+            },
+            {
+              "name": "competition",
+              "tag": "adc-competition",
+              "type": "text",
+              "value": "PREMIER LEAGUE"
+            },
+            {
+              "name": "hometeam",
+              "tag": "adc-hometeam",
+              "type": "text",
+              "value": "$.values[*].homeTeam",
+              "isFeed": true,
+              "feedName": "homeTeam"
+            },
+            {
+              "name": "homeodd",
+              "tag": "adc-homeodd",
+              "type": "text",
+              "value": "$.values[*].homeOdd",
+              "isFeed": true,
+              "feedName": "homeOdd"
+            },
+            {
+              "name": "drawteam",
+              "tag": "adc-drawteam",
+              "type": "text",
+              "value": "DRAW"
+            },
+            {
+              "name": "drawodd",
+              "tag": "adc-drawodd",
+              "type": "text",
+              "value": "$.values[*].drawOdd",
+              "isFeed": true,
+              "feedName": "drawOdd"
+            },
+            {
+              "name": "awayteam",
+              "tag": "adc-awayteam",
+              "type": "text",
+              "value": "$.values[*].awayTeam",
+              "isFeed": true,
+              "feedName": "awayTeam"
+            },
+            {
+              "name": "awayodd",
+              "tag": "adc-awayodd",
+              "type": "text",
+              "value": "4.45"
+            },
+            {
+              "name": "oddcontainer",
+              "tag": "adc-oddcontainer",
+              "type": "image",
+              "value": ""
+            },
+            {
+              "name": "logowrapper",
+              "tag": "adc-logowrapper",
+              "type": "image",
+              "value": ""
+            }
+          ],
+          "isCreative": true,
+          "creativeId": "697cb68d0f49e38f26e7c7ad"
+        }]
+      ],
+        "feedObjects": [{
+          "name": "homeTeam",
+          "path": "$.values[*].homeTeam",
+          "values": [
+            "Paris Saint Germain",
+            "Chelsea",
+            "Dortmund"
+          ]
+        },
+        {
+          "name": "homeTeamLogo",
+          "path": "$.values[*].homeTeamLogo",
+          "values": [
+            "https://cdn.adcropper.com/assets/teamLogos/france-ligue-1/paris-saint-germain.png",
+            "https://cdn.adcropper.com/assets/teamLogos/england-premier-league/chelsea.png",
+            "https://cdn.adcropper.com/assets/teamLogos/germany-bundesliga/borussia-dortmund.png"
+          ]
+        },
+        {
+          "name": "homeOdd",
+          "path": "$.values[*].homeOdd",
+          "values": [
+            "2.3",
+            "1.25",
+            "2"
+          ]
+        },
+        {
+          "name": "awayTeam",
+          "path": "$.values[*].awayTeam",
+          "values": [
+            "Manchester City",
+            "Bayer Leverkusen",
+            "Wolksburg"
+          ]
+        },
+        {
+          "name": "awayTeamLogo",
+          "path": "$.values[*].awayTeamLogo",
+          "values": [
+            "https://cdn.adcropper.com/assets/teamLogos/england-premier-league/manchester-city.png",
+            "https://cdn.adcropper.com/assets/teamLogos/germany-bundesliga/bayer-leverkusen.png",
+            "https://cdn.adcropper.com/assets/teamLogos/germany-bundesliga/vfl-wolfsburg.png"
+          ]
+        },
+        {
+          "name": "awayOdd",
+          "path": "$.values[*].awayOdd",
+          "values": [
+            "1.9",
+            "2.23",
+            "2.3"
+          ]
+        },
+        {
+          "name": "drawOdd",
+          "path": "$.values[*].drawOdd",
+          "values": [
+            "1.25",
+            "1.5",
+            "1.75"
+          ]
+        }
+      ]
+}

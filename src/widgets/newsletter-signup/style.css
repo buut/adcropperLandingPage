@@ -1,0 +1,94 @@
+body {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: transparent;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+}
+
+.signup-container {
+    background: #ffffff;
+    padding: 2.5rem;
+    border-radius: 1.5rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    width: 90%;
+    max-width: 450px;
+    border: 1px solid #f1f5f9;
+}
+
+h3 {
+    margin: 0 0 0.5rem 0;
+    color: #0f172a;
+    font-size: 1.5rem;
+}
+
+p {
+    margin: 0 0 1.5rem 0;
+    color: #64748b;
+    font-size: 0.875rem;
+}
+
+.signup-form {
+    display: flex;
+    gap: 0.75rem;
+}
+
+input {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+input:focus {
+    border-color: rgb(19 108 108);
+    box-shadow: 0 0 0 3px rgba(19, 108, 108, 0.1);
+}
+
+button {
+    background: rgb(19, 108, 108);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+button:hover {
+    background: rgb(19 108 108 / 0.9);
+}
+
+.hidden { display: none; }
+
+#message {
+    margin-top: 1rem;
+    color: #059669;
+    font-weight: 600;
+    font-size: 0.875rem;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 400px) {
+    .signup-form {
+        flex-direction: column;
+    }
+    .signup-container {
+        padding: 1.5rem;
+    }
+}
