@@ -226,12 +226,26 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                 startTime = (layer.animation.exit.start || 0) / 100;
                 maxT = ((layer.animation.exit.start || 0) + (layer.animation.exit.duration || 0)) / 100;
             } else if (isAll) {
-                startTime = (layer.animation?.entry?.start || 0) / 100;
-                // If the user wants play-all, they expect to see Entry -> Main -> Exit.
-                // We stop at the end of the final Exit frame if it exists, otherwise stage end.
-                if (layer.animation?.exit) {
-                    maxT = ((layer.animation.exit.start || 0) + (layer.animation.exit.duration || 0)) / 100;
-                }
+                const entryVal = layer.animation?.entry;
+                const mainVal = layer.animation?.main;
+                const exitVal = layer.animation?.exit;
+                
+                const eStart = (entryVal?.start || 0);
+                const eEnd = eStart + (entryVal?.duration || 0);
+                
+                const mStart = (mainVal?.start ?? eEnd);
+                const mEnd = mStart + (mainVal?.duration || 0);
+                
+                const xStart = (exitVal?.start ?? mEnd);
+                const xEnd = xStart + (exitVal?.duration || 0);
+                
+                startTime = eStart / 100;
+                maxT = xEnd / 100;
+                
+                console.log(`[LayerPreview] Full phase calculation: Entry(${eStart}-${eEnd}), Main(${mStart}-${mEnd}), Exit(${xStart}-${xEnd}). Total MaxT: ${maxT}`);
+                
+                // If everything is zero or invalid, default to stage duration
+                if (maxT <= startTime) maxT = stageDuration || 10;
             }
             
             console.log(`[LayerPreview] Local animation: ${phase} from ${startTime}s to ${maxT}s for layer ${layer.id}`);
@@ -1484,35 +1498,55 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
         }
     }, [meta.label, sizingLayoutType, zoom, layer.width, layer.height, onUpdateLayers]);
 
-    const handleInteractionAction = (action: AnimationTriggerAction) => {
-        console.log(`[LayerPreview] handleInteractionAction for layer: ${layer.id}, action: ${action}`);
+    const handleInteractionAction = (action: AnimationTriggerAction, includeChildren: boolean = false) => {
+        console.log(`[LayerPreview] handleInteractionAction for layer: ${layer.id}, action: ${action}, includeChildren: ${includeChildren}`);
         const lowAction = String(action || '').toLowerCase();
         
         if (lowAction.includes('entry') || lowAction.includes('inbound')) {
             setInteractionAnim({ active: true, phase: 'entry' });
-        } else if (lowAction.includes('main') || lowAction.includes('middle') || lowAction.includes('mid')) {
+        } else if (lowAction.includes('main') || lowAction.includes('middle') || lowAction.includes('mid') || lowAction.includes('loop')) {
             setInteractionAnim({ active: true, phase: 'main' });
         } else if (lowAction.includes('exit') || lowAction.includes('outbound')) {
             setInteractionAnim({ active: true, phase: 'exit' });
         } else if (lowAction.includes('all') || lowAction.includes('full') || lowAction.includes('sequence')) {
             setInteractionAnim({ active: true, phase: 'all' });
-        } else if (action === 'stop' || action === 'reset') {
+        } else if (lowAction.includes('toggle')) {
+            setInteractionAnim(prev => {
+                if (prev?.active) return { active: false, phase: null };
+                // Determine phase to play
+                let phaseToPlay: any = 'all';
+                if (lowAction.includes('entry')) phaseToPlay = 'entry';
+                else if (lowAction.includes('main') || lowAction.includes('loop')) phaseToPlay = 'main';
+                else if (lowAction.includes('exit')) phaseToPlay = 'exit';
+                return { active: true, phase: phaseToPlay };
+            });
+        } else if (action === 'stop' || action === 'reset' || lowAction.includes('stop')) {
             setInteractionAnim({ active: false, phase: null });
         } else if (action === 'pause') {
             setInteractionAnim(prev => prev ? { ...prev, active: false } : null);
         } else if (action === 'resume') {
             setInteractionAnim(prev => prev ? { ...prev, active: true } : null);
         }
+
+        // Propagate to children if it's a group and flag is set
+        if (includeChildren && layer.type === 'group' && layer.children) {
+            console.log(`[LayerPreview] Propagating interaction "${action}" to ${layer.children.length} children of group ${layer.id}`);
+            layer.children.forEach(child => {
+                document.dispatchEvent(new CustomEvent('layer:interaction', {
+                    detail: { targetLayerId: child.id, action, includeChildren: true }
+                }));
+            });
+        }
     };
 
     // Routes interaction to target layer (cross-layer) or self
-    const fireInteraction = (ia: { targetLayerId?: string; action: AnimationTriggerAction }) => {
+    const fireInteraction = (ia: { targetLayerId?: string; action: AnimationTriggerAction; includeChildren?: boolean }) => {
         if (ia.targetLayerId && ia.targetLayerId !== layer.id) {
             document.dispatchEvent(new CustomEvent('layer:interaction', {
-                detail: { targetLayerId: ia.targetLayerId, action: ia.action }
+                detail: { targetLayerId: ia.targetLayerId, action: ia.action, includeChildren: ia.includeChildren }
             }));
         } else {
-            handleInteractionAction(ia.action);
+            handleInteractionAction(ia.action, ia.includeChildren);
         }
     };
 
@@ -1520,8 +1554,8 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
     React.useEffect(() => {
         const handler = (e: CustomEvent) => {
             if (e.detail.targetLayerId === layer.id) {
-                console.log(`[LayerPreview] Received cross-layer interaction: ${e.detail.action} for layer ${layer.id}`);
-                handleInteractionAction(e.detail.action as AnimationTriggerAction);
+                console.log(`[LayerPreview] Received cross-layer interaction: ${e.detail.action} for layer ${layer.id}, children: ${e.detail.includeChildren}`);
+                handleInteractionAction(e.detail.action as AnimationTriggerAction, e.detail.includeChildren);
             }
         };
         document.addEventListener('layer:interaction', handler as EventListener);
@@ -1544,17 +1578,20 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                         // Action just triggered (became true)
                         if (a.actionType === 'play-animation' || a.actionType === 'toggle-animation') {
                             const phase = a.config?.animationPhase || 'entry';
-                            console.log(`[LayerPreview] Action ${a.id} activated! Playing phase: ${phase} on layer ${layer.id}`);
-                            handleInteractionAction(`play-${phase}` as AnimationTriggerAction);
+                            const includeChildren = a.config?.includeChildren || false;
+                            console.log(`[LayerPreview] Action ${a.id} activated! Playing phase: ${phase} on layer ${layer.id}, children: ${includeChildren}`);
+                            handleInteractionAction(`play-${phase}` as AnimationTriggerAction, includeChildren);
                         } else if (a.actionType === 'stop-animation') {
-                            console.log(`[LayerPreview] Action ${a.id} activated! Stopping animation on layer ${layer.id}`);
-                            handleInteractionAction('stop');
+                            const includeChildren = a.config?.includeChildren || false;
+                            console.log(`[LayerPreview] Action ${a.id} activated! Stopping animation on layer ${layer.id}, children: ${includeChildren}`);
+                            handleInteractionAction('stop', includeChildren);
                         }
                     } else {
                         // Action became false
                         if (a.actionType === 'toggle-animation' || a.actionType === 'play-animation') {
-                            console.log(`[LayerPreview] Action ${a.id} deactivated. Stopping animation on layer ${layer.id}`);
-                            handleInteractionAction('stop');
+                            const includeChildren = a.config?.includeChildren || false;
+                            console.log(`[LayerPreview] Action ${a.id} deactivated. Stopping animation on layer ${layer.id}, children: ${includeChildren}`);
+                            handleInteractionAction('stop', includeChildren);
                         }
                     }
                 }
@@ -1572,8 +1609,12 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                 (type === 'mouseenter' && ia.event === 'hover') ||
                 (type === 'mouseleave' && ia.event === 'hoverEnd');
             if (matches && (isPreviewMode || isInteractive)) {
-                console.log(`[LayerPreview] Found matching interaction action: ${ia.action} targeting ${ia.targetLayerId || 'self'}`);
-                fireInteraction({ targetLayerId: ia.targetLayerId, action: ia.action as AnimationTriggerAction });
+                console.log(`[LayerPreview] Found matching interaction action: ${ia.action} targeting ${ia.targetLayerId || 'self'}, includeChildren: ${!!ia.includeChildren}`);
+                fireInteraction({ 
+                    targetLayerId: ia.targetLayerId, 
+                    action: ia.action as AnimationTriggerAction, 
+                    includeChildren: !!ia.includeChildren 
+                });
             }
         });
 
@@ -1618,10 +1659,10 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
             if (entry.isIntersecting) {
                 if (scrollTrigger.targetLayerId && scrollTrigger.targetLayerId !== layer.id) {
                     document.dispatchEvent(new CustomEvent('layer:interaction', {
-                        detail: { targetLayerId: scrollTrigger.targetLayerId, action: scrollTrigger.action }
+                        detail: { targetLayerId: scrollTrigger.targetLayerId, action: scrollTrigger.action, includeChildren: scrollTrigger.includeChildren }
                     }));
                 } else {
-                    handleInteractionAction(scrollTrigger.action as AnimationTriggerAction);
+                    handleInteractionAction(scrollTrigger.action as AnimationTriggerAction, scrollTrigger.includeChildren);
                 }
             }
         }, { threshold: 0.15 });
@@ -1631,9 +1672,14 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
     }, [layer.interactionActions, layer.id, isPreviewMode, isInteractive]);
 
     const handleClick = (e: React.MouseEvent) => {
-        if (e.button !== 0) return; // Only left click for layer selection
-        e.stopPropagation();
-        console.log(`[LayerPreview] handleClick for layer ${layer.id} (${layer.name})`);
+        if (e.button !== 0) return; 
+        
+        // Allow propagation only in preview/interactive mode so parents (groups) can also trigger their actions
+        if (!isPreviewMode && !isInteractive) {
+            e.stopPropagation();
+        }
+
+        console.log(`[LayerPreview] handleClick for layer ${layer.id} (${layer.name}) - stopPropagation: ${!isPreviewMode && !isInteractive}`);
         handleActionTrigger('click');
 
         if (meta.linkUrl && (isPreviewMode || e.metaKey || e.ctrlKey)) {
@@ -2378,11 +2424,23 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                     }}
                     onTouchStart={() => {
                         const t = layer.interactionActions?.find(a => a.event === 'touchStart');
-                        if (t && (isPreviewMode || isInteractive)) fireInteraction({ targetLayerId: t.targetLayerId, action: t.action as AnimationTriggerAction });
+                        if (t && (isPreviewMode || isInteractive)) {
+                            fireInteraction({ 
+                                targetLayerId: t.targetLayerId, 
+                                action: t.action as AnimationTriggerAction,
+                                includeChildren: !!t.includeChildren
+                            });
+                        }
                     }}
                     onTouchEnd={() => {
                         const t = layer.interactionActions?.find(a => a.event === 'touchEnd');
-                        if (t && (isPreviewMode || isInteractive)) fireInteraction({ targetLayerId: t.targetLayerId, action: t.action as AnimationTriggerAction });
+                        if (t && (isPreviewMode || isInteractive)) {
+                            fireInteraction({ 
+                                targetLayerId: t.targetLayerId, 
+                                action: t.action as AnimationTriggerAction,
+                                includeChildren: !!t.includeChildren
+                            });
+                        }
                     }}
                 onMouseDown={(e) => {
                     if (isEditing) {
@@ -3015,11 +3073,23 @@ const LayerPreview: React.FC<LayerPreviewProps> = React.memo(({
                     }}
                     onTouchStart={() => {
                         const t = layer.interactionActions?.find(a => a.event === 'touchStart');
-                        if (t && (isPreviewMode || isInteractive)) fireInteraction({ targetLayerId: t.targetLayerId, action: t.action as AnimationTriggerAction });
+                        if (t && (isPreviewMode || isInteractive)) {
+                            fireInteraction({ 
+                                targetLayerId: t.targetLayerId, 
+                                action: t.action as AnimationTriggerAction,
+                                includeChildren: !!t.includeChildren
+                            });
+                        }
                     }}
                     onTouchEnd={() => {
                         const t = layer.interactionActions?.find(a => a.event === 'touchEnd');
-                        if (t && (isPreviewMode || isInteractive)) fireInteraction({ targetLayerId: t.targetLayerId, action: t.action as AnimationTriggerAction });
+                        if (t && (isPreviewMode || isInteractive)) {
+                            fireInteraction({ 
+                                targetLayerId: t.targetLayerId, 
+                                action: t.action as AnimationTriggerAction,
+                                includeChildren: !!t.includeChildren
+                            });
+                        }
                     }}
                 onMouseDown={(e) => {
                     if (isEditing) {

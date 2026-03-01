@@ -186,6 +186,7 @@ export interface LandingPageAction {
     openInNewTab?: boolean;
     sectionId?: string;
     animationPhase?: 'entry' | 'main' | 'exit' | 'all';
+    includeChildren?: boolean;
   };
 }
 
@@ -202,6 +203,7 @@ export interface InteractionAction {
   event: AnimationTriggerEvent;
   action: AnimationTriggerAction;
   targetLayerId?: string; // if unset, targets the layer itself
+  includeChildren?: boolean;
 }
 
 export interface GuideLine {

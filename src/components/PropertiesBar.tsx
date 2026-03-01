@@ -2522,6 +2522,8 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                         }
 
                                                                         if (['play-animation', 'stop-animation', 'toggle-animation'].includes(type)) {
+                                                                            const targetLayer = allLayers.find(l => l.id === action.targetId);
+                                                                            const isGroup = targetLayer?.type === 'group';
                                                                             return (
                                                                                 <div className="flex flex-col gap-2">
                                                                                     <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest pl-1">Animation Phase</label>
@@ -2536,6 +2538,18 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                                                             </button>
                                                                                         ))}
                                                                                     </div>
+                                                                                    {isGroup && (
+                                                                                        <div className="flex items-center gap-2 mt-1 pl-1">
+                                                                                            <input 
+                                                                                                type="checkbox" 
+                                                                                                id={`children-${action.id}`} 
+                                                                                                checked={!!config.includeChildren} 
+                                                                                                onChange={e => updateConfig({ includeChildren: e.target.checked })} 
+                                                                                                className="accent-primary" 
+                                                                                            />
+                                                                                            <label htmlFor={`children-${action.id}`} className="text-[9px] font-bold text-gray-500">Play children animations</label>
+                                                                                        </div>
+                                                                                    )}
                                                                                 </div>
                                                                             );
                                                                         }
@@ -3112,6 +3126,24 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                                                 )}
                                             </div>
                                         </div>
+                                        {(() => {
+                                            const actualTarget = targetLayer || fl;
+                                            if (actualTarget?.type === 'group' && ['play-entry', 'play-main', 'play-exit', 'play-all', 'toggle-animation', 'stop-animation'].includes(ia.action)) {
+                                                return (
+                                                    <div className="flex items-center gap-2 mt-2 px-1 border-t border-gray-50 pt-2">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            id={`ia-children-${ia.id}`} 
+                                                            checked={!!ia.includeChildren} 
+                                                            onChange={e => updateActions(actions.map((x, i) => i === idx ? { ...x, includeChildren: e.target.checked } : x))}
+                                                            className="accent-primary" 
+                                                        />
+                                                        <label htmlFor={`ia-children-${ia.id}`} className="text-[9px] font-bold text-gray-500 uppercase tracking-tight">Play children animations</label>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                     </div>
                                 );
                             })}
